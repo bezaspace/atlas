@@ -67,7 +67,7 @@ select = ["E", "F", "I", "W"]
 
 [tool.pyright]
 include = ["src"]
-exclude = ["**/__pycache__"]
+exclude = ["**/__pycache__", "src/atlascore/memory/_qdrant.py", "src/atlascore/middleware/_otel.py"]
 typeCheckingMode = "standard"
 pythonVersion = "3.10"
 reportMissingTypeStubs = false

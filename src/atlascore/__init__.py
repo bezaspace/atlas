@@ -12,6 +12,7 @@ from .llm._base import (
     RateLimitError,
 )
 from .llm._openai import OpenAIChatCompletionClient
+from .memory import BaseMemory, FileMemory, ListMemory, MemoryContent, MemoryQueryResult
 from .messages import (
     AssistantMessage,
     BaseMessage,
@@ -21,6 +22,23 @@ from .messages import (
     ToolCallRequest,
     ToolMessage,
     UserMessage,
+)
+from .middleware import (
+    ApprovalMiddleware,
+    BaseMiddleware,
+    LoggingMiddleware,
+    MiddlewareChain,
+    MiddlewareContext,
+)
+from .research_schemas import Citation, Evidence, ResearchBrief, VerificationResult
+from .termination import (
+    BaseTermination,
+    CompositeTermination,
+    ExternalTermination,
+    MaxMessageTermination,
+    TextMentionTermination,
+    TimeoutTermination,
+    TokenUsageTermination,
 )
 from .tools._base import ApprovalMode, BaseTool, FunctionTool
 from .tools._core_tools import (
@@ -44,6 +62,7 @@ from .types import (
     StopMessage,
     TaskCompleteEvent,
     TaskStartEvent,
+    ToolApprovalEvent,
     ToolCallEvent,
     ToolCallResponseEvent,
 )
@@ -64,6 +83,11 @@ __all__ = [
     "RateLimitError",
     "InvalidRequestError",
     "OpenAIChatCompletionClient",
+    "MemoryContent",
+    "MemoryQueryResult",
+    "BaseMemory",
+    "ListMemory",
+    "FileMemory",
     "BaseMessage",
     "Message",
     "SystemMessage",
@@ -95,4 +119,21 @@ __all__ = [
     "ErrorEvent",
     "OrchestrationResponse",
     "StopMessage",
+    "BaseTermination",
+    "MaxMessageTermination",
+    "TokenUsageTermination",
+    "TimeoutTermination",
+    "TextMentionTermination",
+    "ExternalTermination",
+    "CompositeTermination",
+    "BaseMiddleware",
+    "MiddlewareChain",
+    "MiddlewareContext",
+    "LoggingMiddleware",
+    "ApprovalMiddleware",
+    "Citation",
+    "Evidence",
+    "VerificationResult",
+    "ResearchBrief",
+    "ToolApprovalEvent",
 ]
