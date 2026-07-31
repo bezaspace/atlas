@@ -5,7 +5,7 @@ This file tracks what has been implemented and what is next for the Atlas projec
 ## Latest state
 
 - **Current branch target:** `master`
-- **Last milestone completed:** Phase 3.3-3.7 (remaining Agent enhancements)
+- **Last milestone completed:** Phase 4 (Memory tiers)
 - **Package:** `atlascore` is installable and tested
 
 ## Milestones
@@ -22,7 +22,7 @@ This file tracks what has been implemented and what is next for the Atlas projec
 | 3.5 | Termination conditions | Done | `MaxMessageTermination`, `TokenUsageTermination`, `TimeoutTermination`, `TextMentionTermination`, `ExternalTermination`, `CompositeTermination` |
 | 3.6 | Middleware / approval | Done | `MiddlewareChain`, `BaseMiddleware`, `LoggingMiddleware`, `ApprovalMiddleware`, `ToolApprovalEvent`/`ToolApprovalRequest` pause/resume |
 | 3.7 | OpenTelemetry | Done | `OTelMiddleware` + `auto_instrument()` with Gen-AI semantic conventions, gated by `ATLAS_ENABLE_OTEL` |
-| 4 | Memory | Not started | In-memory, file, and Qdrant memory tiers |
+| 4 | Memory | Done | `ListMemory`, `FileMemory`, `QdrantMemory` (with `:memory:`, local path, and Qdrant Cloud support) |
 | 5 | Workflow engine | Not started | DAG builder, runner, checkpointing |
 | 6 | Orchestration | Not started | Round-robin, plan-based, AI speaker selection |
 | 7 | Research product | Not started | `ResearchBrief`, agents (Planner, Researcher, Verifier, Synthesizer) |
@@ -30,14 +30,15 @@ This file tracks what has been implemented and what is next for the Atlas projec
 
 ## Verification of completed work
 
-- `pytest tests/` — 34 passed
+- `pytest tests/` — 40 passed, 1 skipped (cloud integration test skipped by default)
+- `tests/test_qdrant_memory.py` covers add/query/get_context/clear for `:memory:` and local path; cloud test verified against Qdrant Cloud
 - `ruff check src tests examples` — clean
 - `pyright src` — clean
 - Real API smoke test (`examples/calculator_agent.py`) used `calculator` and `datetime` tools correctly.
 
 ## Next recommended step
 
-Phase 3 is complete. Next is **Phase 4+** (workflow engine, orchestration, research product, backend/frontend, RAG/MCP, computer-use, evals, deployment).
+Phase 4 is complete. Next is **Phase 5** (workflow engine: DAG builder, runner, checkpointing).
 
 ## References
 

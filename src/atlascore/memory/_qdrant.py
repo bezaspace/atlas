@@ -50,24 +50,33 @@ class QdrantMemory(BaseMemory):
             )
 
         from qdrant_client import QdrantClient
-        from qdrant_client.models import Distance, VectorParams
 
         self.collection_name = collection_name
         self.score_threshold = score_threshold
 
-        if path and path == ":memory:":
-            path = None
-
         if url:
+            url = url.strip()
+            api_key = (api_key or "").strip()
             self.client = QdrantClient(url=url, api_key=api_key)
+            self._is_persistent = True
         else:
+            path = path or ":memory:"
+            path = path.strip()
             self.client = QdrantClient(path=path)
+            self._is_persistent = path != ":memory:"
 
         self._embedding_fn = embedding_fn
         self._embedding_model_name = embedding_model
         self._embedding_model = None
 
-        self.client.recreate_collection(
+        self._ensure_collection()
+
+    def _ensure_collection(self) -> None:
+        from qdrant_client.models import Distance, VectorParams
+
+        if self.client.collection_exists(self.collection_name):
+            self.client.delete_collection(self.collection_name)
+        self.client.create_collection(
             collection_name=self.collection_name,
             vectors_config=VectorParams(size=self._vector_size(), distance=Distance.COSINE),
         )
@@ -83,7 +92,8 @@ class QdrantMemory(BaseMemory):
             )
 
         model = self._get_embedding_model()
-        return model.get_sentence_embedding_dimension()
+        size_method = getattr(model, "get_embedding_dimension", model.get_sentence_embedding_dimension)
+        return size_method()
 
     def _get_embedding_model(self):
         if self._embedding_model is None:
@@ -128,14 +138,26 @@ class QdrantMemory(BaseMemory):
         if to_remove:
             self.client.delete(collection_name=self.collection_name, points_selector=to_remove)
 
+    def _search_points(self, vector: List[float], limit: int, score_threshold: float):
+        if hasattr(self.client, "search"):
+            return self.client.search(
+                collection_name=self.collection_name,
+                query_vector=vector,
+                limit=limit,
+                score_threshold=score_threshold,
+            )
+
+        response = self.client.query_points(
+            collection_name=self.collection_name,
+            query=vector,
+            limit=limit,
+            score_threshold=score_threshold,
+        )
+        return response.points
+
     async def query(self, query: str, limit: int = 10) -> MemoryQueryResult:
         vector = self._embed(query)
-        results = self.client.search(
-            collection_name=self.collection_name,
-            query_vector=vector,
-            limit=limit,
-            score_threshold=self.score_threshold,
-        )
+        results = self._search_points(vector, limit, self.score_threshold)
 
         memories: List[MemoryContent] = []
         for point in results:
@@ -173,13 +195,7 @@ class QdrantMemory(BaseMemory):
         return MemoryQueryResult(results=memories)
 
     async def clear(self) -> None:
-        self.client.delete_collection(collection_name=self.collection_name)
-        from qdrant_client.models import Distance, VectorParams
-
-        self.client.recreate_collection(
-            collection_name=self.collection_name,
-            vectors_config=VectorParams(size=self._vector_size(), distance=Distance.COSINE),
-        )
+        self._ensure_collection()
 
     async def get_stats(self) -> Dict[str, Any]:
         base = await super().get_stats()
@@ -188,5 +204,5 @@ class QdrantMemory(BaseMemory):
             **base,
             "current_memories": count,
             "collection_name": self.collection_name,
-            "is_persistent": self.client._client is not None,
+            "is_persistent": getattr(self, "_is_persistent", False),
         }
