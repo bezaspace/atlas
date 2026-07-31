@@ -8,6 +8,7 @@ from ._core_tools import (
     ThinkTool,
     create_core_tools,
 )
+from ._research_tools import WebFetchTool, WebSearchTool, create_research_tools
 
 __all__ = [
     "BaseTool",
@@ -20,4 +21,7 @@ __all__ = [
     "RegexTool",
     "TaskStatusTool",
     "create_core_tools",
+    "WebSearchTool",
+    "WebFetchTool",
+    "create_research_tools",
 ]

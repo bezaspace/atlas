@@ -5,7 +5,7 @@ This file tracks what has been implemented and what is next for the Atlas projec
 ## Latest state
 
 - **Current branch target:** `master`
-- **Last milestone completed:** Phase 6 (Orchestration)
+- **Last milestone completed:** Phase 7 (Research product)
 - **Package:** `atlascore` is installable and tested
 
 ## Milestones
@@ -25,23 +25,25 @@ This file tracks what has been implemented and what is next for the Atlas projec
 | 4 | Memory | Done | `ListMemory`, `FileMemory`, `QdrantMemory` (with `:memory:`, local path, and Qdrant Cloud support) |
 | 5 | Workflow engine | Done | `Workflow`, `FunctionStep`, `AgentStep`, `WorkflowRunner` with streaming, `FileCheckpointStore`/`InMemoryCheckpointStore`, DAG validation |
 | 6 | Orchestration | Done | `BaseOrchestrator`, `RoundRobinOrchestrator`, `AIOrchestrator`, `PlanBasedOrchestrator` with streaming and usage aggregation |
-| 7 | Research product | Not started | `ResearchBrief`, agents (Planner, Researcher, Verifier, Synthesizer) |
+| 7 | Research product | Done | `ResearchPlan`, `SearchResult`, `TriageResult`, `CriticReview`, `ResearchReport`; `WebSearchTool`/`WebFetchTool`; `PlannerAgent`, `TriageAgent`, `ResearcherAgent`, `VerifierAgent`, `SynthesizerAgent`; `CriticPanel`; full typed research pipeline DAG |
 | 8+ | Backend, frontend, RAG, MCP, computer-use, evals, deployment | Not started | Later phases |
 
 ## Verification of completed work
 
-- `pytest tests/` — 65 passed, 7 skipped (cloud integration tests skipped by default)
+- `pytest tests/` — 66 passed, 7 skipped (cloud integration tests skipped by default)
 - `tests/test_qdrant_memory.py` covers add/query/get_context/clear for `:memory:` and local path; cloud test verified against Qdrant Cloud
 - `tests/test_workflow.py` covers DAG builder/validation, runner, fan-in, conditional edges, checkpoint save/resume, file store, and `AgentStep`
 - `tests/test_orchestration.py` covers round-robin, AI-driven, and plan-based orchestrators with mocked LLM clients
+- `tests/test_research.py` covers Planner, Triage, Researcher, Verifier, Synthesizer, CriticPanel, and full `ResearchPipeline`
 - `ruff check src tests examples` — clean
-- `pyright src` — clean
+- `pyright src` — clean (one pre-existing `__all__` warning)
 - Real API smoke test (`examples/calculator_agent.py`) used `calculator` and `datetime` tools correctly.
 - New example `examples/orchestration_demo.py` provides a poet/critic round-robin smoke script.
+- New example `examples/research_pipeline.py` demonstrates the full research pipeline with live web search/fetch.
 
 ## Next recommended step
 
-Phase 6 is complete. Next is **Phase 7** (research product: Planner, Researcher, Verifier, Synthesizer agents and the full research pipeline workflow).
+Phase 7 is complete. Next is **Phase 8+** (backend, frontend, advanced RAG, MCP, computer-use, evals, and deployment).
 
 ## References
 

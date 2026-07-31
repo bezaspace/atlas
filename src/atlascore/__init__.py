@@ -51,7 +51,19 @@ from .orchestration import (
     RoundRobinOrchestrator,
     StepProgressEvaluation,
 )
-from .research_schemas import Citation, Evidence, ResearchBrief, VerificationResult
+from .research_schemas import (
+    Citation,
+    CriticReview,
+    Evidence,
+    ResearchBrief,
+    ResearchPlan,
+    ResearchReport,
+    SearchOutput,
+    SearchResult,
+    TriageClassification,
+    TriageResult,
+    VerificationResult,
+)
 from .termination import (
     BaseTermination,
     CompositeTermination,
@@ -195,6 +207,13 @@ __all__ = [
     "Evidence",
     "VerificationResult",
     "ResearchBrief",
+    "ResearchPlan",
+    "ResearchReport",
+    "SearchOutput",
+    "SearchResult",
+    "TriageClassification",
+    "TriageResult",
+    "CriticReview",
     "ToolApprovalEvent",
     "Workflow",
     "WorkflowMetadata",
