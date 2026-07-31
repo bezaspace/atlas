@@ -41,6 +41,16 @@ from .middleware import (
     MiddlewareChain,
     MiddlewareContext,
 )
+from .orchestration import (
+    AgentSelection,
+    AIOrchestrator,
+    BaseOrchestrator,
+    ExecutionPlan,
+    PlanBasedOrchestrator,
+    PlanStep,
+    RoundRobinOrchestrator,
+    StepProgressEvaluation,
+)
 from .research_schemas import Citation, Evidence, ResearchBrief, VerificationResult
 from .termination import (
     BaseTermination,
@@ -63,13 +73,19 @@ from .tools._core_tools import (
 )
 from .types import (
     AgentEvent,
+    AgentExecutionCompleteEvent,
+    AgentExecutionStartEvent,
     AgentResponse,
+    AgentSelectionEvent,
     ChatCompletionChunk,
     ChatCompletionResult,
     ErrorEvent,
     ModelCallEvent,
     ModelResponseEvent,
+    OrchestrationCompleteEvent,
+    OrchestrationEvent,
     OrchestrationResponse,
+    OrchestrationStartEvent,
     StopMessage,
     TaskCompleteEvent,
     TaskStartEvent,
@@ -155,6 +171,12 @@ __all__ = [
     "ToolCallEvent",
     "ToolCallResponseEvent",
     "ErrorEvent",
+    "AgentSelectionEvent",
+    "AgentExecutionStartEvent",
+    "AgentExecutionCompleteEvent",
+    "OrchestrationStartEvent",
+    "OrchestrationCompleteEvent",
+    "OrchestrationEvent",
     "OrchestrationResponse",
     "StopMessage",
     "BaseTermination",
@@ -198,4 +220,12 @@ __all__ = [
     "Context",
     "Edge",
     "EdgeCondition",
+    "BaseOrchestrator",
+    "RoundRobinOrchestrator",
+    "AIOrchestrator",
+    "AgentSelection",
+    "PlanBasedOrchestrator",
+    "ExecutionPlan",
+    "PlanStep",
+    "StepProgressEvaluation",
 ]

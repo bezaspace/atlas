@@ -212,6 +212,47 @@ class StopMessage(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+# Orchestration events for streaming
+class OrchestrationStartEvent(BaseEvent):
+    event_type: str = Field(default="orchestration_start")
+    task: str = Field(...)
+    pattern: str = Field(...)
+
+
+class OrchestrationCompleteEvent(BaseEvent):
+    event_type: str = Field(default="orchestration_complete")
+    result: str = Field(...)
+    stop_reason: str = Field(...)
+
+
+class AgentSelectionEvent(BaseEvent):
+    event_type: str = Field(default="agent_selection")
+    selected_agent: str = Field(...)
+    selection_reason: Optional[str] = Field(default=None)
+
+
+class AgentExecutionStartEvent(BaseEvent):
+    event_type: str = Field(default="agent_execution_start")
+    executing_agent: str = Field(...)
+    context_size: int = Field(...)
+
+
+class AgentExecutionCompleteEvent(BaseEvent):
+    event_type: str = Field(default="agent_execution_complete")
+    executing_agent: str = Field(...)
+    success: bool = Field(...)
+    message_count: int = Field(...)
+
+
+OrchestrationEvent = Union[
+    OrchestrationStartEvent,
+    OrchestrationCompleteEvent,
+    AgentSelectionEvent,
+    AgentExecutionStartEvent,
+    AgentExecutionCompleteEvent,
+]
+
+
 class OrchestrationResponse(BaseModel):
     messages: Sequence[Message] = Field(...)
     final_result: str = Field(...)
@@ -220,3 +261,41 @@ class OrchestrationResponse(BaseModel):
     pattern_metadata: Dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(frozen=True)
+
+    @property
+    def truncated_result(self) -> str:
+        if len(self.final_result) > 80:
+            return self.final_result[:80] + "..."
+        return self.final_result
+
+    def __str__(self) -> str:
+        duration_s = self.usage.duration_ms / 1000
+        tokens_in = (
+            f"{self.usage.tokens_input / 1000:.1f}k"
+            if self.usage.tokens_input >= 1000
+            else str(self.usage.tokens_input)
+        )
+        tokens_out = (
+            f"{self.usage.tokens_output / 1000:.1f}k"
+            if self.usage.tokens_output >= 1000
+            else str(self.usage.tokens_output)
+        )
+        cost_str = (
+            f", cost: ${self.usage.cost_estimate:.4f}"
+            if self.usage.cost_estimate
+            else ""
+        )
+        pattern = self.pattern_metadata.get("pattern", "Unknown")
+        return (
+            f"{pattern}: {self.truncated_result} | duration: {duration_s:.1f}s, "
+            f"tokens: in:{tokens_in}, out:{tokens_out}, calls: {self.usage.llm_calls}{cost_str}. "
+            f"Stop reason: {self.stop_message.content}"
+        )
+
+    def __repr__(self) -> str:
+        pattern = self.pattern_metadata.get("pattern", "Unknown")
+        iterations = self.pattern_metadata.get("iterations_completed", 0)
+        return (
+            f"OrchestrationResponse(pattern='{pattern}', messages={len(self.messages)}, "
+            f"iterations={iterations}, usage={self.usage}, stop='{self.stop_message.source}')"
+        )
