@@ -434,6 +434,7 @@ class ResearchPipeline:
         report = ResearchReport(
             query=input.query,
             brief=input.brief,
+            brief_markdown=input.brief.to_markdown(),
             sources=input.evidence,
             critic_review=input.critic_review,
             paths=paths,

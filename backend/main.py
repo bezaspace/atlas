@@ -14,11 +14,13 @@ import asyncio
 import json
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, AsyncGenerator, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 from atlascore import OpenAIChatCompletionClient
 from atlascore.tools import WebFetchTool, WebSearchTool
@@ -315,3 +317,9 @@ def _make_pipeline(config: EngineConfig, session: Session) -> Any:
         persist_dir=config.persist_dir,
         approval_event_factory=approval_event_factory,
     )
+
+
+# Serve the built React dashboard when a dist folder is present.
+_frontend_dist = Path("frontend/dist")
+if _frontend_dist.is_dir():
+    app.mount("/", StaticFiles(directory=str(_frontend_dist), html=True), name="static")

@@ -5,7 +5,7 @@ This file tracks what has been implemented and what is next for the Atlas projec
 ## Latest state
 
 - **Current branch target:** `master`
-- **Last milestone completed:** Phase 8 (Backend API)
+- **Last milestone completed:** Phase 9 (Frontend dashboard)
 - **Package:** `atlascore` is installable and tested
 
 ## Milestones
@@ -27,7 +27,8 @@ This file tracks what has been implemented and what is next for the Atlas projec
 | 6 | Orchestration | Done | `BaseOrchestrator`, `RoundRobinOrchestrator`, `AIOrchestrator`, `PlanBasedOrchestrator` with streaming and usage aggregation |
 | 7 | Research product | Done | `ResearchPlan`, `SearchResult`, `TriageResult`, `CriticReview`, `ResearchReport`; `WebSearchTool`/`WebFetchTool`; `PlannerAgent`, `TriageAgent`, `ResearcherAgent`, `VerifierAgent`, `SynthesizerAgent`; `CriticPanel`; full typed research pipeline DAG |
 | 8 | Backend API | Done | FastAPI + lifespan + CORS; `/health`; in-memory `SessionManager`/`SessionStore`; `POST /sessions/{id}/run` + `GET /sessions/{id}/stream` (SSE); `POST /sessions/{id}/approve` human-in-the-loop gate; `POST /eval` dataset eval harness with LLM-as-judge; tests |
-| 9+ | Frontend, RAG, MCP, computer-use, deployment | Not started | Later phases |
+| 9 | Frontend dashboard | Done | React 19 + TypeScript + Vite + Tailwind CSS v4; live SSE activity feed; research query input; markdown brief with citations; sources panel; human approval gate UI; sessions/eval viewers; cost/trace inspector |
+| 10+ | RAG, MCP, computer-use, deployment | Not started | Later phases |
 
 ## Verification of completed work
 
@@ -37,13 +38,17 @@ This file tracks what has been implemented and what is next for the Atlas projec
 - `tests/test_orchestration.py` covers round-robin, AI-driven, and plan-based orchestrators with mocked LLM clients
 - `tests/test_research.py` covers Planner, Triage, Researcher, Verifier, Synthesizer, CriticPanel, and full `ResearchPipeline`
 - `tests/test_backend.py` covers `/health`, `/sessions`, `POST /sessions/{id}/run`, `GET /sessions/{id}/stream` (SSE), `POST /sessions/{id}/approve` resume, and `POST /eval`
+- Frontend `npm run build` outputs `frontend/dist` that the FastAPI backend can serve
+- `npm run lint` (TypeScript) and `npm run build` pass in `frontend/`
 - `ruff check src backend tests examples` — clean
 - `pyright` (includes `src` and `backend`) — clean (one pre-existing `__all__` warning)
 - Real API smoke test (`examples/calculator_agent.py`) used `calculator` and `datetime` tools correctly.
 - New example `examples/orchestration_demo.py` provides a poet/critic round-robin smoke script.
 - New example `examples/research_pipeline.py` demonstrates the full research pipeline with live web search/fetch.
 
-## Running the backend
+## Running the app
+
+### Backend
 
 ```bash
 source .venv/bin/activate
@@ -53,21 +58,27 @@ export TAVILY_API_KEY="..."  # or GOOGLE_API_KEY + GOOGLE_CSE_ID
 uvicorn backend.main:app --port 8000
 ```
 
-Test endpoints:
+### Frontend (dev)
 
 ```bash
-# Health
-curl http://localhost:8000/health
+cd frontend
+npm install
+npm run dev
+```
 
-# Create a session and start a research run
-SESSION_ID=$(curl -s -X POST http://localhost:8000/sessions | jq -r '.id')
-curl -X POST "http://localhost:8000/sessions/${SESSION_ID}/run" -H "Content-Type: application/json" -d '{"query":"What is Atlas?"}'
-curl -N http://localhost:8000/sessions/${SESSION_ID}/stream
+### Frontend (production build served by FastAPI)
+
+```bash
+cd frontend
+npm run build
+cd ..
+source .venv/bin/activate
+uvicorn backend.main:app --port 8000
 ```
 
 ## Next recommended step
 
-Phase 8 is complete. Next is **Phase 9+** (frontend, advanced RAG, MCP, computer-use, evals hardening, and deployment).
+Phase 9 is complete. Next is **Phase 10+** (advanced RAG, MCP, computer-use, deployment).
 
 ## References
 
@@ -75,3 +86,4 @@ Phase 8 is complete. Next is **Phase 9+** (frontend, advanced RAG, MCP, computer
 - `PROJECT_PLAN.md` — architecture and feature overview
 - `src/atlascore/` — implemented core framework
 - `backend/` — FastAPI backend and session management
+- `frontend/` — React dashboard

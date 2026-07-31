@@ -160,6 +160,7 @@ class ResearchReport(BaseModel):
 
     query: str = Field(..., description="Research question")
     brief: ResearchBrief = Field(..., description="Final research brief")
+    brief_markdown: str = Field(default="", description="Rendered markdown of the brief")
     sources: List[SearchResult] = Field(
         default_factory=list, description="Sources used"
     )
