@@ -12,7 +12,18 @@ from .llm._base import (
     RateLimitError,
 )
 from .llm._openai import OpenAIChatCompletionClient
-from .memory import BaseMemory, FileMemory, ListMemory, MemoryContent, MemoryQueryResult
+from .memory import (
+    BaseMemory,
+    FileMemory,
+    ListMemory,
+    MemoryContent,
+    MemoryQueryResult,
+)
+
+try:
+    from .memory import QdrantMemory
+except ImportError:
+    QdrantMemory = None  # type: ignore[assignment, misc]
 from .messages import (
     AssistantMessage,
     BaseMessage,
@@ -88,6 +99,7 @@ __all__ = [
     "BaseMemory",
     "ListMemory",
     "FileMemory",
+    *(["QdrantMemory"] if QdrantMemory is not None else []),
     "BaseMessage",
     "Message",
     "SystemMessage",

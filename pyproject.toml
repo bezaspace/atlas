@@ -57,6 +57,9 @@ include = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "integration: tests that require external services (slow)",
+]
 
 [tool.ruff]
 line-length = 120
