@@ -5,7 +5,7 @@ This file tracks what has been implemented and what is next for the Atlas projec
 ## Latest state
 
 - **Current branch target:** `master`
-- **Last milestone completed:** Phase 7 (Research product)
+- **Last milestone completed:** Phase 8 (Backend API)
 - **Package:** `atlascore` is installable and tested
 
 ## Milestones
@@ -26,27 +26,52 @@ This file tracks what has been implemented and what is next for the Atlas projec
 | 5 | Workflow engine | Done | `Workflow`, `FunctionStep`, `AgentStep`, `WorkflowRunner` with streaming, `FileCheckpointStore`/`InMemoryCheckpointStore`, DAG validation |
 | 6 | Orchestration | Done | `BaseOrchestrator`, `RoundRobinOrchestrator`, `AIOrchestrator`, `PlanBasedOrchestrator` with streaming and usage aggregation |
 | 7 | Research product | Done | `ResearchPlan`, `SearchResult`, `TriageResult`, `CriticReview`, `ResearchReport`; `WebSearchTool`/`WebFetchTool`; `PlannerAgent`, `TriageAgent`, `ResearcherAgent`, `VerifierAgent`, `SynthesizerAgent`; `CriticPanel`; full typed research pipeline DAG |
-| 8+ | Backend, frontend, RAG, MCP, computer-use, evals, deployment | Not started | Later phases |
+| 8 | Backend API | Done | FastAPI + lifespan + CORS; `/health`; in-memory `SessionManager`/`SessionStore`; `POST /sessions/{id}/run` + `GET /sessions/{id}/stream` (SSE); `POST /sessions/{id}/approve` human-in-the-loop gate; `POST /eval` dataset eval harness with LLM-as-judge; tests |
+| 9+ | Frontend, RAG, MCP, computer-use, deployment | Not started | Later phases |
 
 ## Verification of completed work
 
-- `pytest tests/` — 66 passed, 7 skipped (cloud integration tests skipped by default)
+- `pytest tests/` — 71 passed, 7 skipped (cloud integration tests skipped by default)
 - `tests/test_qdrant_memory.py` covers add/query/get_context/clear for `:memory:` and local path; cloud test verified against Qdrant Cloud
 - `tests/test_workflow.py` covers DAG builder/validation, runner, fan-in, conditional edges, checkpoint save/resume, file store, and `AgentStep`
 - `tests/test_orchestration.py` covers round-robin, AI-driven, and plan-based orchestrators with mocked LLM clients
 - `tests/test_research.py` covers Planner, Triage, Researcher, Verifier, Synthesizer, CriticPanel, and full `ResearchPipeline`
-- `ruff check src tests examples` — clean
-- `pyright src` — clean (one pre-existing `__all__` warning)
+- `tests/test_backend.py` covers `/health`, `/sessions`, `POST /sessions/{id}/run`, `GET /sessions/{id}/stream` (SSE), `POST /sessions/{id}/approve` resume, and `POST /eval`
+- `ruff check src backend tests examples` — clean
+- `pyright` (includes `src` and `backend`) — clean (one pre-existing `__all__` warning)
 - Real API smoke test (`examples/calculator_agent.py`) used `calculator` and `datetime` tools correctly.
 - New example `examples/orchestration_demo.py` provides a poet/critic round-robin smoke script.
 - New example `examples/research_pipeline.py` demonstrates the full research pipeline with live web search/fetch.
 
+## Running the backend
+
+```bash
+source .venv/bin/activate
+export LLM_API_KEY="..."
+export LLM_MODEL="gpt-4o-mini"
+export TAVILY_API_KEY="..."  # or GOOGLE_API_KEY + GOOGLE_CSE_ID
+uvicorn backend.main:app --port 8000
+```
+
+Test endpoints:
+
+```bash
+# Health
+curl http://localhost:8000/health
+
+# Create a session and start a research run
+SESSION_ID=$(curl -s -X POST http://localhost:8000/sessions | jq -r '.id')
+curl -X POST "http://localhost:8000/sessions/${SESSION_ID}/run" -H "Content-Type: application/json" -d '{"query":"What is Atlas?"}'
+curl -N http://localhost:8000/sessions/${SESSION_ID}/stream
+```
+
 ## Next recommended step
 
-Phase 7 is complete. Next is **Phase 8+** (backend, frontend, advanced RAG, MCP, computer-use, evals, and deployment).
+Phase 8 is complete. Next is **Phase 9+** (frontend, advanced RAG, MCP, computer-use, evals hardening, and deployment).
 
 ## References
 
 - `TASK_BACKLOG.md` — full ordered task list
 - `PROJECT_PLAN.md` — architecture and feature overview
 - `src/atlascore/` — implemented core framework
+- `backend/` — FastAPI backend and session management

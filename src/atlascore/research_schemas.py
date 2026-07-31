@@ -167,6 +167,8 @@ class ResearchReport(BaseModel):
         default=None, description="Review from the critic panel"
     )
     paths: List[str] = Field(default_factory=list, description="Files persisted")
+    approved: bool = Field(default=True, description="Whether the human approval gate approved")
+    human_feedback: str = Field(default="", description="Feedback from human approval gate")
     usage: Dict[str, Any] = Field(
         default_factory=dict, description="Aggregated usage statistics"
     )

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -46,6 +47,7 @@ class ResearchQuery(BaseModel):
 
     query: str = Field(...)
     context: Optional[str] = Field(default=None)
+    session_id: Optional[str] = Field(default=None)
 
 
 class PlanOutput(BaseModel):
@@ -121,6 +123,24 @@ class CriticOutput(BaseModel):
     critic_review: CriticReview = Field(...)
 
 
+class HumanApprovalInput(BaseModel):
+    """Input to the human approval gate."""
+
+    query: str = Field(...)
+    brief: ResearchBrief = Field(...)
+    critic_review: CriticReview = Field(...)
+
+
+class HumanApprovalOutput(BaseModel):
+    """Output of the human approval gate."""
+
+    query: str = Field(...)
+    brief: ResearchBrief = Field(...)
+    critic_review: CriticReview = Field(...)
+    approved: bool = Field(default=True)
+    feedback: str = Field(default="")
+
+
 class PersistInput(BaseModel):
     """Input to the persistence step."""
 
@@ -128,10 +148,12 @@ class PersistInput(BaseModel):
     brief: ResearchBrief = Field(...)
     evidence: List[SearchResult] = Field(...)
     critic_review: CriticReview = Field(...)
+    approved: bool = Field(default=True)
+    feedback: str = Field(default="")
 
 
 class ResearchPipeline:
-    """End-to-end research pipeline: Plan -> RAG -> Search -> Verify -> Synthesize -> Critic -> Persist."""
+    """End-to-end research pipeline with human approval gate."""
 
     def __init__(
         self,
@@ -141,6 +163,7 @@ class ResearchPipeline:
         triage_model_client: Optional[BaseChatCompletionClient] = None,
         memory: Optional[BaseMemory] = None,
         persist_dir: str = "data/research",
+        approval_event_factory: Optional[Callable[[str], asyncio.Event]] = None,
     ) -> None:
         self.model_client = model_client
         self.search_tool = search_tool
@@ -148,6 +171,7 @@ class ResearchPipeline:
         self.triage_model_client = triage_model_client or model_client
         self.memory = memory
         self.persist_dir = Path(persist_dir)
+        self.approval_event_factory = approval_event_factory
 
         self.planner = PlannerAgent(model_client)
         self.triage_agent = TriageAgent(self.triage_model_client)
@@ -213,6 +237,13 @@ class ResearchPipeline:
                 self._critic_step,
             ),
             FunctionStep(
+                "human_approval",
+                StepMetadata(name="Human Approval", description="Human-in-the-loop approval gate"),
+                HumanApprovalInput,
+                HumanApprovalOutput,
+                self._human_approval_step,
+            ),
+            FunctionStep(
                 "persist",
                 StepMetadata(name="Persist", description="Save brief and sources"),
                 PersistInput,
@@ -232,18 +263,25 @@ class ResearchPipeline:
         workflow.add_edge("verify", "synthesize")
         workflow.add_edge("synthesize", "critic")
         workflow.add_edge("synthesize", "persist")
-        workflow.add_edge("critic", "persist")
+        workflow.add_edge("critic", "human_approval")
+        workflow.add_edge("human_approval", "persist")
         workflow.set_start_step("plan")
         workflow.add_end_step("persist")
 
         return workflow
 
-    async def run(self, query: str, context: Optional[str] = None) -> ResearchReport:
+    async def run(
+        self,
+        query: str,
+        context: Optional[str] = None,
+        session_id: Optional[str] = None,
+    ) -> ResearchReport:
         """Run the research pipeline and return the final report."""
         workflow = self.build_workflow()
         runner = WorkflowRunner()
         execution = await runner.run(
-            workflow, initial_input={"query": query, "context": context}
+            workflow,
+            initial_input={"query": query, "context": context, "session_id": session_id},
         )
         report_data = execution.state.get("persist_output")
         if not report_data:
@@ -251,6 +289,8 @@ class ResearchPipeline:
         return ResearchReport(**report_data)
 
     async def _plan_step(self, input: ResearchQuery, context: Context) -> PlanOutput:
+        if input.session_id:
+            context.set("session_id", input.session_id)
         plan = await self.planner.run(input.query, context=input.context or "")
         output = PlanOutput(query=input.query, plan=plan)
         context.set("plan_output", output.model_dump())
@@ -317,6 +357,30 @@ class ResearchPipeline:
         context.set("critic_usage", self.critic_panel.last_usage.model_dump())
         return output
 
+    async def _human_approval_step(
+        self, input: HumanApprovalInput, context: Context
+    ) -> HumanApprovalOutput:
+        session_id = context.get("session_id")
+        approved = True
+        feedback = ""
+
+        if self.approval_event_factory and session_id:
+            event = self.approval_event_factory(session_id)
+            try:
+                await asyncio.wait_for(event.wait(), timeout=300.0)
+                approved = True
+            except asyncio.TimeoutError:
+                approved = True
+                feedback = "Auto-approved after timeout."
+
+        return HumanApprovalOutput(
+            query=input.query,
+            brief=input.brief,
+            critic_review=input.critic_review,
+            approved=approved,
+            feedback=feedback,
+        )
+
     async def _persist_step(self, input: PersistInput, context: Context) -> ResearchReport:
         slug = re.sub(r"\W+", "-", input.query.lower()).strip("-")[:50]
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -373,6 +437,8 @@ class ResearchPipeline:
             sources=input.evidence,
             critic_review=input.critic_review,
             paths=paths,
+            approved=input.approved,
+            human_feedback=input.feedback,
             usage=usage,
         )
         context.set("persist_output", report.model_dump())
