@@ -4,8 +4,8 @@ This file tracks what has been implemented and what is next for the Atlas projec
 
 ## Latest state
 
-- **Current branch target:** `master` (merged via `devin/first-milestone-atlascore`)
-- **Last milestone completed:** First milestone from `TASK_BACKLOG.md` — Phase 0 + 1.1-1.3 + 2.1-2.2 + 3.1/3.2
+- **Current branch target:** `master`
+- **Last milestone completed:** Phase 3.3-3.7 (remaining Agent enhancements)
 - **Package:** `atlascore` is installable and tested
 
 ## Milestones
@@ -17,11 +17,11 @@ This file tracks what has been implemented and what is next for the Atlas projec
 | 2 | Tool system | Done | `BaseTool`, `FunctionTool`, schema generation, core tools (`calculator`, `datetime`, `think`, `json_parser`, `regex`, `task_status`) |
 | 3.1 | Agent reasoning loop (`run()`) | Done | Sequential tool-call loop, `AgentResponse`, `max_iterations` |
 | 3.2 | Agent streaming (`run_stream()`) | Done | Yields events and final response, cancellation token support |
-| 3.3 | Memory injection | Not started | Needs `BaseMemory`, `ListMemory`, `QdrantMemory` |
-| 3.4 | Structured output | Partial | LLM client supports `json_schema`; no research schemas yet |
-| 3.5 | Termination conditions | Not started | `MaxMessageTermination`, `TokenUsageTermination`, etc. |
-| 3.6 | Middleware / approval | Not started | `MiddlewareChain`, `ApprovalMiddleware` |
-| 3.7 | OpenTelemetry | Not started | Span emission for agents/tools/models |
+| 3.3 | Memory injection | Done | `BaseMemory`, `ListMemory`, `FileMemory`, `QdrantMemory` (optional); Agent prepends memory context |
+| 3.4 | Structured output | Done | `ResearchBrief`, `Citation`, `Evidence`, `VerificationResult`; `Agent.output_format` |
+| 3.5 | Termination conditions | Done | `MaxMessageTermination`, `TokenUsageTermination`, `TimeoutTermination`, `TextMentionTermination`, `ExternalTermination`, `CompositeTermination` |
+| 3.6 | Middleware / approval | Done | `MiddlewareChain`, `BaseMiddleware`, `LoggingMiddleware`, `ApprovalMiddleware`, `ToolApprovalEvent`/`ToolApprovalRequest` pause/resume |
+| 3.7 | OpenTelemetry | Done | `OTelMiddleware` + `auto_instrument()` with Gen-AI semantic conventions, gated by `ATLAS_ENABLE_OTEL` |
 | 4 | Memory | Not started | In-memory, file, and Qdrant memory tiers |
 | 5 | Workflow engine | Not started | DAG builder, runner, checkpointing |
 | 6 | Orchestration | Not started | Round-robin, plan-based, AI speaker selection |
@@ -30,14 +30,14 @@ This file tracks what has been implemented and what is next for the Atlas projec
 
 ## Verification of completed work
 
-- `pytest tests/` — 16 passed
+- `pytest tests/` — 34 passed
 - `ruff check src tests examples` — clean
 - `pyright src` — clean
 - Real API smoke test (`examples/calculator_agent.py`) used `calculator` and `datetime` tools correctly.
 
 ## Next recommended step
 
-Implement **Phase 3.3-3.5** (memory injection, structured output schemas, termination conditions) before moving to the workflow engine, so the standalone `Agent` is fully production-ready.
+Phase 3 is complete. Next is **Phase 4+** (workflow engine, orchestration, research product, backend/frontend, RAG/MCP, computer-use, evals, deployment).
 
 ## References
 
