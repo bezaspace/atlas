@@ -5,7 +5,7 @@ This file tracks what has been implemented and what is next for the Atlas projec
 ## Latest state
 
 - **Current branch target:** `master`
-- **Last milestone completed:** Phase 11 (MCP integration with Exa, arXiv, GitHub, and news servers)
+- **Last milestone completed:** Phase 12 (Computer-use fallback with Playwright, vision-capable `ComputerUseAgent`, and browser fallback in the research pipeline)
 - **Package:** `atlascore` is installable and tested
 
 ## Milestones
@@ -30,11 +30,13 @@ This file tracks what has been implemented and what is next for the Atlas projec
 | 9 | Frontend dashboard | Done | React 19 + TypeScript + Vite + Tailwind CSS v4; live SSE activity feed; research query input; markdown brief with citations; sources panel; human approval gate UI; sessions/eval viewers; cost/trace inspector |
 | 10 | RAG knowledge base | Done | Persistent Qdrant collection for briefs/sources; Gemini `gemini-embedding-001` free-tier embeddings with local sentence-transformers fallback; retrieval at plan/research/synthesis time; source deduplication and `data/sources/<url_hash>.md` re-hydration files |
 | 11 | MCP integration | Done | `MCPClientManager` + `MCPTool` (implements `BaseTool`); stdio/SSE/streamable-http transports; default Exa remote (no API key/Node); optional arXiv/GitHub/news stdio servers; destructive tools require approval; `/mcp/servers` and `/mcp/tools` API; `mcp` optional extra in `pyproject.toml` |
-| 12+ | Computer-use, deployment | Not started | Later phases |
+| 12 | Computer-use fallback | Done | `PlaywrightWebClient` + browser tools; `ComputerUseAgent` streams screenshots to a vision LLM; `ResearcherAgent` falls back to browser agent when `WebFetchTool` fails; `LLM_VISION_MODEL` config in `/health` |
+| 13+ | Deployment | Not started | Later phases |
 
 ## Verification of completed work
 
-- `pytest tests/` — 82 passed, 1 skipped (cloud integration tests skipped by default)
+- `pytest tests/` — 87 passed, 1 skipped (cloud integration tests skipped by default)
+- `tests/test_computer_use.py` covers `PlaywrightWebClient` initialization/state/screenshot, browser tools, `ComputerUseAgent` tool-call loop, and `ResearcherAgent` browser fallback on fetch failure/sparse content
 - `tests/test_mcp.py` covers `MCPTool` execution, destructive/read-only approval-mode detection, and best-effort offline MCP server handling
 - `tests/test_qdrant_memory.py` covers add/query/get_context/clear for `:memory:` and local path; cloud test verified against Qdrant Cloud
 - `tests/test_workflow.py` covers DAG builder/validation, runner, fan-in, conditional edges, checkpoint save/resume, file store, and `AgentStep`
@@ -45,7 +47,7 @@ This file tracks what has been implemented and what is next for the Atlas projec
 - `npm run lint` (TypeScript) and `npm run build` pass in `frontend/`
 - `ruff check src backend tests examples` — clean
 - `pyright` (includes `src` and `backend`) — clean (one pre-existing `__all__` warning)
-- `uvicorn backend.main:app --port 8000` starts and `/health` reports the configured embedding provider and registered MCP servers; `/mcp/servers` and `/mcp/tools` list discovered MCP tools
+- `uvicorn backend.main:app --port 8000` starts and `/health` reports the configured model, vision model, embedding provider, and registered MCP servers; `/mcp/servers` and `/mcp/tools` list discovered MCP tools
 - Real API smoke test (`examples/calculator_agent.py`) used `calculator` and `datetime` tools correctly.
 - New example `examples/orchestration_demo.py` provides a poet/critic round-robin smoke script.
 - New example `examples/research_pipeline.py` demonstrates the full research pipeline with live web search/fetch.
@@ -88,7 +90,7 @@ uvicorn backend.main:app --port 8000
 
 ## Next recommended step
 
-Phase 11 is complete. Next is **Phase 12+** (computer-use, deployment).
+Phase 12 is complete. Next is **Phase 13+** (deployment and beyond).
 
 ## References
 

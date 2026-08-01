@@ -1,6 +1,7 @@
 """Atlascore: from-scratch multi-agent core for Atlas."""
 
 from .agents._agent import Agent
+from .agents._computer_use import ComputerUseAgent, PlaywrightWebClient, create_playwright_tools
 from .base_types import ToolResult, Usage
 from .cancellation import CancellationToken
 from .context import AgentContext, ToolApprovalRequest, ToolApprovalResponse
@@ -136,6 +137,9 @@ __version__ = "0.1.0"
 
 __all__ = [
     "Agent",
+    "ComputerUseAgent",
+    "PlaywrightWebClient",
+    "create_playwright_tools",
     "Usage",
     "ToolResult",
     "CancellationToken",

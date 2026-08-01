@@ -57,6 +57,21 @@ def _default_model_client() -> Optional[OpenAIChatCompletionClient]:
     )
 
 
+def _default_vision_model_client() -> Optional[OpenAIChatCompletionClient]:
+    """Create a vision-capable model client if a model/API key is configured."""
+    api_key = os.getenv("LLM_VISION_API_KEY") or os.getenv("LLM_API_KEY")
+    if not api_key:
+        return None
+    vision_model = os.getenv("LLM_VISION_MODEL")
+    if not vision_model:
+        return None
+    return OpenAIChatCompletionClient(
+        model=vision_model,
+        api_key=api_key,
+        base_url=os.getenv("LLM_VISION_BASE_URL") or os.getenv("LLM_BASE_URL") or None,
+    )
+
+
 def _default_search_tool() -> Optional[WebSearchTool]:
     tavily_key = os.getenv("TAVILY_API_KEY")
     if tavily_key:
@@ -196,6 +211,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan: initialize shared state."""
     app.state.session_manager = SessionManager()
     app.state.model_client = _default_model_client()
+    app.state.vision_model_client = _default_vision_model_client()
     app.state.search_tool = _default_search_tool()
     app.state.fetch_tool = WebFetchTool()
     app.state.memory = _default_memory()
@@ -236,6 +252,7 @@ def get_engine_config(request: Request) -> EngineConfig:
     model_client = request.app.state.model_client
     search_tool = request.app.state.search_tool
     fetch_tool = request.app.state.fetch_tool
+    vision_model_client = getattr(request.app.state, "vision_model_client", None)
     memory = getattr(request.app.state, "memory", None)
     mcp_manager = getattr(request.app.state, "mcp_manager", None)
     if model_client is None or search_tool is None:
@@ -250,6 +267,7 @@ def get_engine_config(request: Request) -> EngineConfig:
         model_client=model_client,
         search_tool=search_tool,
         fetch_tool=fetch_tool,
+        vision_model_client=vision_model_client,
         memory=memory,
         mcp_manager=mcp_manager,
         persist_dir=request.app.state.persist_dir,
@@ -262,6 +280,10 @@ def _search_provider_name() -> Optional[str]:
     if os.getenv("GOOGLE_API_KEY") and os.getenv("GOOGLE_CSE_ID"):
         return "google"
     return None
+
+
+def _vision_model_name() -> Optional[str]:
+    return os.getenv("LLM_VISION_MODEL") or None
 
 
 def _embedding_provider_name() -> Optional[str]:
@@ -282,6 +304,7 @@ async def health(request: Request):
     return HealthResponse(
         status="healthy",
         model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
+        vision_model=_vision_model_name(),
         search_provider=_search_provider_name(),
         embedding_provider=_embedding_provider_name(),
         mcp_servers=mcp_servers,
@@ -516,6 +539,7 @@ def _make_pipeline(config: EngineConfig, session: Session) -> Any:
         search_tool=config.search_tool,
         fetch_tool=config.fetch_tool,
         triage_model_client=config.model_client,
+        vision_model_client=config.vision_model_client,
         memory=config.memory,
         mcp_manager=config.mcp_manager,
         persist_dir=config.persist_dir,

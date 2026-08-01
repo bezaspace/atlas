@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from ..agents import ComputerUseAgent
 from ..base_types import Usage
 from ..llm import BaseChatCompletionClient
 from ..memory import BaseMemory, MemoryContent
@@ -163,19 +164,31 @@ class ResearchPipeline:
         search_tool: BaseTool,
         fetch_tool: BaseTool,
         triage_model_client: Optional[BaseChatCompletionClient] = None,
+        vision_model_client: Optional[BaseChatCompletionClient] = None,
         memory: Optional[BaseMemory] = None,
         mcp_manager: Optional[Any] = None,
         persist_dir: str = "data/research",
         approval_event_factory: Optional[Callable[[str], asyncio.Event]] = None,
+        computer_use_agent: Optional[ComputerUseAgent] = None,
     ) -> None:
         self.model_client = model_client
         self.search_tool = search_tool
         self.fetch_tool = fetch_tool
         self.triage_model_client = triage_model_client or model_client
+        self.vision_model_client = vision_model_client
         self.memory = memory
         self.mcp_manager = mcp_manager
         self.persist_dir = Path(persist_dir)
         self.approval_event_factory = approval_event_factory
+
+        self.computer_use_agent = computer_use_agent
+        if computer_use_agent is None and vision_model_client is not None:
+            self.computer_use_agent = ComputerUseAgent(
+                model_client=vision_model_client,
+                start_url="about:blank",
+                headless=True,
+                max_actions=10,
+            )
 
         self.planner = PlannerAgent(model_client)
         self.triage_agent = TriageAgent(self.triage_model_client)
@@ -184,6 +197,7 @@ class ResearchPipeline:
             search_tool=search_tool,
             fetch_tool=fetch_tool,
             triage_agent=self.triage_agent,
+            computer_use_agent=self.computer_use_agent,
         )
         self.verifier = VerifierAgent(model_client)
         self.synthesizer = SynthesizerAgent(model_client)

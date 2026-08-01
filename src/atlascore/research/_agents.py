@@ -7,7 +7,7 @@ from typing import Any, List, Optional
 
 from pydantic import BaseModel, ValidationError
 
-from ..agents import Agent
+from ..agents import Agent, ComputerUseAgent
 from ..base_types import Usage
 from ..llm import BaseChatCompletionClient
 from ..messages import AssistantMessage, UserMessage
@@ -143,12 +143,14 @@ class ResearcherAgent:
         search_tool: BaseTool,
         fetch_tool: BaseTool,
         triage_agent: Optional[TriageAgent] = None,
+        computer_use_agent: Optional[ComputerUseAgent] = None,
         max_sources: int = 5,
     ) -> None:
         self.model_client = model_client
         self.search_tool = search_tool
         self.fetch_tool = fetch_tool
         self.triage_agent = triage_agent
+        self.computer_use_agent = computer_use_agent
         self.max_sources = max_sources
         self.last_usage: Usage = Usage(duration_ms=0)
         self._extractor = Agent(
@@ -201,8 +203,18 @@ class ResearcherAgent:
             content = ""
             if fetch_result.success:
                 content = str(fetch_result.result or "")
+                # If the fetched text is too short or empty, try the browser fallback.
+                if len(content.strip()) < 200 and self.computer_use_agent:
+                    browser_content = await self._browser_fallback(result.url, query)
+                    if browser_content:
+                        content = browser_content
             else:
                 content = f"Fetch failed: {fetch_result.error}"
+                if self.computer_use_agent:
+                    browser_content = await self._browser_fallback(result.url, query)
+                    if browser_content:
+                        content = browser_content
+
             fetched.append(
                 result.model_copy(
                     update={"content": content[:4000], "relevance": result.relevance or "partial"}
@@ -225,6 +237,23 @@ class ResearcherAgent:
         if not text:
             return SearchOutput(query=query, evidence=fetched, summary="No extraction output")
         return _parse_structured(text, SearchOutput)  # type: ignore[return-value]
+
+    async def _browser_fallback(self, url: str, query: str) -> str:
+        """Use the computer-use agent to retrieve content from a page when fetch fails."""
+        if not self.computer_use_agent:
+            return ""
+        try:
+            task = (
+                f"Navigate to {url} and extract the main text content relevant to the research question.\n"
+                f"Research question: {query}\n"
+                "Return a concise summary of the page's main content. "
+                "If the page requires interaction to load content, perform the minimum interaction necessary."
+            )
+            response = await self.computer_use_agent.run(task=task)
+            self.last_usage = (self.last_usage or Usage(duration_ms=0)) + (response.usage or Usage(duration_ms=0))
+            return _find_last_assistant_text(response)
+        except Exception as e:
+            return f"Browser fallback failed: {e}"
 
 
 class VerifierAgent(_BaseResearchAgent):
