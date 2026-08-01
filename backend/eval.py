@@ -9,15 +9,15 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from atlascore import OpenAIChatCompletionClient
-from atlascore.messages import UserMessage
+from atlascore.eval import Dataset, EvalRunner, LLMEvalJudge, ResearchPipelineTarget
 from atlascore.research import ResearchPipeline
-from atlascore.research_schemas import ResearchReport
 
-from .models import EvalReport, EvalResult, EvalScore
+from .models import EvalReport, EvalResult
+from .models import EvalScore as BackendEvalScore
 
 
 class DatasetItem(BaseModel):
-    """A single eval dataset item."""
+    """A single legacy JSONL eval dataset item."""
 
     query: str = Field(...)
     expected: Optional[str] = Field(default=None)
@@ -42,86 +42,111 @@ class EvalHarness:
         self, dataset_path: str
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Yield progress events and a final `EvalReport`."""
+        dataset = self._load_dataset(dataset_path)
+
+        target = ResearchPipelineTarget(self.config.pipeline)
+        judge = LLMEvalJudge(
+            client=self.config.judge_client,
+            default_criteria=["accuracy", "citation_coverage", "hallucination", "clarity"],
+        )
+        runner = EvalRunner(judge=judge)
+
+        results = await runner.run(dataset, [target])
+
+        eval_results: List[EvalResult] = []
+        total_scores: Dict[str, float] = {
+            "accuracy": 0.0,
+            "citation_coverage": 0.0,
+            "hallucination": 0.0,
+            "overall": 0.0,
+        }
+
+        target_results = list(results.results.values())[0] if results.results else {}
+        for idx, (task_id, task_result) in enumerate(target_results.items()):
+            task = task_result.trajectory.task
+            yield {
+                "type": "eval_progress",
+                "current": idx + 1,
+                "total": len(target_results),
+                "query": task.input,
+            }
+
+            score = self._convert_score(task_result.score)
+            eval_results.append(
+                EvalResult(
+                    query=task.input,
+                    expected=task.expected_output,
+                    score=score,
+                )
+            )
+            total_scores["accuracy"] += score.accuracy
+            total_scores["citation_coverage"] += score.citation_coverage
+            total_scores["hallucination"] += score.hallucination
+            total_scores["overall"] += score.overall
+
+        count = len(eval_results)
+        aggregate = {k: (v / count if count else 0.0) for k, v in total_scores.items()}
+
+        report = EvalReport(
+            dataset_path=dataset_path,
+            total=count,
+            scores=eval_results,
+            aggregate=aggregate,
+        )
+        yield {"type": "eval_complete", "report": report.model_dump()}
+
+    def _load_dataset(self, dataset_path: str) -> Dataset:
         path = Path(dataset_path)
         if not path.exists():
             raise FileNotFoundError(f"Dataset not found: {dataset_path}")
 
-        items: List[DatasetItem] = []
-        with open(path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                items.append(DatasetItem.model_validate_json(line))
-                if len(items) >= self.max_items:
-                    break
-
-        results: List[EvalResult] = []
-        total_accuracy = 0.0
-        total_citation = 0.0
-        total_hallucination = 0.0
-        total_overall = 0.0
-
-        for idx, item in enumerate(items):
-            yield {
-                "type": "eval_progress",
-                "current": idx + 1,
-                "total": len(items),
-                "query": item.query,
-            }
-
-            try:
-                report: ResearchReport = await self.config.pipeline.run(item.query)
-                score = await self._judge(item, report)
-            except Exception as e:
-                score = EvalScore(
-                    accuracy=0.0,
-                    citation_coverage=0.0,
-                    hallucination=0.0,
-                    overall=0.0,
-                    rationale=f"Error: {e}",
-                )
-
-            results.append(
-                EvalResult(
-                    query=item.query,
-                    expected=item.expected,
-                    score=score,
-                )
+        if path.suffix == ".jsonl":
+            items: List[DatasetItem] = []
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    items.append(DatasetItem.model_validate_json(line))
+                    if len(items) >= self.max_items:
+                        break
+            name = path.stem
+            tasks = [
+                {
+                    "id": f"{name}_{i}",
+                    "name": f"{name}_{i}",
+                    "input": item.query,
+                    "expected_output": item.expected,
+                    "eval_criteria": ["accuracy", "citation_coverage", "hallucination", "clarity"],
+                }
+                for i, item in enumerate(items)
+            ]
+            return Dataset.from_dict(
+                {
+                    "name": name,
+                    "version": "1.0.0",
+                    "description": f"Loaded from {dataset_path}",
+                    "tasks": tasks,
+                }
             )
-            total_accuracy += score.accuracy
-            total_citation += score.citation_coverage
-            total_hallucination += score.hallucination
-            total_overall += score.overall
 
-        aggregate = {
-            "accuracy": total_accuracy / len(items) if items else 0.0,
-            "citation_coverage": total_citation / len(items) if items else 0.0,
-            "hallucination": total_hallucination / len(items) if items else 0.0,
-            "overall": total_overall / len(items) if items else 0.0,
-        }
+        dataset = Dataset.from_json(path)
+        if self.max_items:
+            dataset.tasks = dataset.tasks[: self.max_items]
+        return dataset
 
-        eval_report = EvalReport(
-            dataset_path=dataset_path,
-            total=len(items),
-            scores=results,
-            aggregate=aggregate,
+    def _convert_score(self, score: Any) -> BackendEvalScore:
+        dims = getattr(score, "dimensions", {}) or {}
+        reasoning = getattr(score, "reasoning", {}) or {}
+        rationale = "\n".join(f"{k}: {v}" for k, v in reasoning.items()) or ""
+        overall = float(getattr(score, "overall", 0.0) or 0.0)
+        accuracy = float(dims.get("accuracy", overall))
+        citation_coverage = float(dims.get("citation_coverage", dims.get("citation_match", overall)))
+        hallucination = float(dims.get("hallucination", overall))
+        return BackendEvalScore(
+            accuracy=accuracy,
+            citation_coverage=citation_coverage,
+            hallucination=hallucination,
+            overall=overall,
+            rationale=rationale,
         )
-        yield {"type": "eval_complete", "report": eval_report.model_dump()}
-
-    async def _judge(self, item: DatasetItem, report: ResearchReport) -> EvalScore:
-        prompt = (
-            f"Evaluate the following research brief for the query: {item.query}\n\n"
-            f"Expected: {item.expected or 'No reference provided'}\n\n"
-            f"Brief:\n{report.brief.to_markdown()}\n\n"
-            "Return JSON with fields: accuracy (0-1), citation_coverage (0-1), "
-            "hallucination (0-1, higher means fewer hallucinations), overall (0-1), rationale."
-        )
-        result = await self.config.judge_client.create(
-            messages=[UserMessage(content=prompt, source="user")],
-            output_format=EvalScore,
-        )
-        if result.structured_output:
-            return result.structured_output  # type: ignore[return-value]
-        content = result.message.content or "{}"
-        return EvalScore.model_validate_json(content)

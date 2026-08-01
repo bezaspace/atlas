@@ -25,6 +25,23 @@ try:
     from .memory import QdrantMemory
 except ImportError:
     QdrantMemory = None  # type: ignore[assignment, misc]
+from .eval import (
+    BaseEvalJudge,
+    CallableTarget,
+    CriterionScore,
+    Dataset,
+    EvalResults,
+    EvalRunner,
+    EvalScore,
+    JudgeResponse,
+    LLMEvalJudge,
+    ReferenceEvalJudge,
+    ResearchPipelineTarget,
+    RunTrajectory,
+    Target,
+    Task,
+    TaskResult,
+)
 from .messages import (
     AssistantMessage,
     BaseMessage,
@@ -251,4 +268,19 @@ __all__ = [
     "ExecutionPlan",
     "PlanStep",
     "StepProgressEvaluation",
+    "Dataset",
+    "Task",
+    "RunTrajectory",
+    "EvalScore",
+    "EvalResults",
+    "TaskResult",
+    "EvalRunner",
+    "BaseEvalJudge",
+    "LLMEvalJudge",
+    "ReferenceEvalJudge",
+    "CriterionScore",
+    "JudgeResponse",
+    "Target",
+    "CallableTarget",
+    "ResearchPipelineTarget",
 ]

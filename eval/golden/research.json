@@ -1,0 +1,47 @@
+{
+  "name": "atlas_research_golden",
+  "version": "1.0.0",
+  "description": "Golden research questions with expected brief summaries for regression testing.",
+  "default_eval_criteria": ["accuracy", "citation_coverage", "hallucination", "clarity"],
+  "tasks": [
+    {
+      "id": "golden_001",
+      "name": "Atlas purpose",
+      "input": "What is Atlas and what does it do?",
+      "expected_output": "Atlas is an autonomous multi-agent deep-research platform that plans, searches, triages, verifies, synthesizes and criticizes research briefs.",
+      "category": "product",
+      "rubric": {
+        "accuracy": "Correctly identifies Atlas as a multi-agent research platform.",
+        "citation_coverage": "Cites authoritative sources or documentation.",
+        "hallucination": "Avoids inventing features not described in the codebase.",
+        "clarity": "Brief is clear, concise, and well-structured."
+      }
+    },
+    {
+      "id": "golden_002",
+      "name": "Phase 13 cost optimization",
+      "input": "How does Atlas optimize research cost?",
+      "expected_output": "Atlas uses a two-stage pipeline where a cheap triage model filters search results and only relevant or partial results are sent to a stronger research model, while cost estimates are tracked per LLM call.",
+      "category": "methodology",
+      "rubric": {
+        "accuracy": "Mentions triage model, strong model, and cost tracking.",
+        "citation_coverage": "Cites the cost optimization implementation.",
+        "hallucination": "Does not invent unsupported pricing details.",
+        "clarity": "Explanation is easy to follow."
+      }
+    },
+    {
+      "id": "golden_003",
+      "name": "PicoAgents inspiration",
+      "input": "Which book and methodology inspired Atlas?",
+      "expected_output": "Atlas is inspired by Victor Dibia's 'Designing Multi-Agent Systems' and the PicoAgents reference implementation.",
+      "category": "methodology",
+      "rubric": {
+        "accuracy": "Names Victor Dibia, the book, and PicoAgents.",
+        "citation_coverage": "Cites the source repository or book.",
+        "hallucination": "Does not misattribute authorship.",
+        "clarity": "Answer is concise and factual."
+      }
+    }
+  ]
+}

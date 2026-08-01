@@ -5,7 +5,7 @@ This file tracks what has been implemented and what is next for the Atlas projec
 ## Latest state
 
 - **Current branch target:** `master`
-- **Last milestone completed:** Phase 13 (Cost optimization with two-stage cheap/strong model routing and cost tracking across the research pipeline)
+- **Last milestone completed:** Phase 14 (Evaluation harness with LLM-as-judge, reference judge, golden dataset, regression runner, and frontend eval viewer integration)
 - **Package:** `atlascore` is installable and tested
 
 ## Milestones
@@ -32,11 +32,13 @@ This file tracks what has been implemented and what is next for the Atlas projec
 | 11 | MCP integration | Done | `MCPClientManager` + `MCPTool` (implements `BaseTool`); stdio/SSE/streamable-http transports; default Exa remote (no API key/Node); optional arXiv/GitHub/news stdio servers; destructive tools require approval; `/mcp/servers` and `/mcp/tools` API; `mcp` optional extra in `pyproject.toml` |
 | 12 | Computer-use fallback | Done | `PlaywrightWebClient` + browser tools; `ComputerUseAgent` streams screenshots to a vision LLM; `ResearcherAgent` falls back to browser agent when `WebFetchTool` fails; `LLM_VISION_MODEL` config in `/health` |
 | 13 | Cost optimization | Done | `TriageAgent` backed by configurable cheap model (`LLM_CHEAP_MODEL`); only relevant/partial results sent to strong model; `Usage.cost_estimate` for free and paid OpenAI/Anthropic/Google/Kilo models; cost surfaced in `AgentResponse`, aggregated by `ResearchPipeline`, and shown in the dashboard; benchmark verifies ~80-90% cost reduction |
-| 14+ | Evaluation harness, deployment | Not started | Later phases |
+| 14 | Evaluation harness | Done | `atlascore/eval` package with `LLMEvalJudge` (structured `CriterionScore` output), `ReferenceEvalJudge` (fuzzy/contains/exact + citation overlap), `Dataset`, `EvalRunner`, `EvalResults`; golden dataset in `eval/golden/research.json`; `tests/eval/test_regression.py` loads golden set and enforces baseline; `backend/eval.py` runs `ResearchPipeline` through `EvalRunner` and returns `EvalReport` to the frontend eval viewer |
+| 15+ | Framework comparison benchmark, deployment | Not started | Later phases |
 
 ## Verification of completed work
 
-- `pytest tests/` — 90 passed, 1 skipped (cloud integration tests skipped by default)
+- `pytest tests/` — 94 passed, 1 skipped (cloud integration tests skipped by default)
+- `tests/eval/test_regression.py` loads `eval/golden/research.json`, runs the `EvalRunner` with `ReferenceEvalJudge`, and asserts the golden set meets an 0.85 average-score baseline while a degraded target fails a 0.6 baseline
 - `tests/test_cost_optimization.py` verifies `TriageAgent` filters irrelevant sources and that two-stage (cheap triage + strong extraction) is ~80-90% cheaper than a naive single-model run
 - `tests/test_computer_use.py` covers `PlaywrightWebClient` initialization/state/screenshot, browser tools, `ComputerUseAgent` tool-call loop, and `ResearcherAgent` browser fallback on fetch failure/sparse content
 - `tests/test_mcp.py` covers `MCPTool` execution, destructive/read-only approval-mode detection, and best-effort offline MCP server handling
@@ -92,7 +94,7 @@ uvicorn backend.main:app --port 8000
 
 ## Next recommended step
 
-Phase 13 is complete. Next is **Phase 14+** (evaluation harness, deployment, and beyond).
+Phase 14 is complete. Next is **Phase 15+** (framework comparison benchmark, deployment, and beyond).
 
 ## References
 
