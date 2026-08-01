@@ -33,11 +33,12 @@ This file tracks what has been implemented and what is next for the Atlas projec
 | 12 | Computer-use fallback | Done | `PlaywrightWebClient` + browser tools; `ComputerUseAgent` streams screenshots to a vision LLM; `ResearcherAgent` falls back to browser agent when `WebFetchTool` fails; `LLM_VISION_MODEL` config in `/health` |
 | 13 | Cost optimization | Done | `TriageAgent` backed by configurable cheap model (`LLM_CHEAP_MODEL`); only relevant/partial results sent to strong model; `Usage.cost_estimate` for free and paid OpenAI/Anthropic/Google/Kilo models; cost surfaced in `AgentResponse`, aggregated by `ResearchPipeline`, and shown in the dashboard; benchmark verifies ~80-90% cost reduction |
 | 14 | Evaluation harness | Done | `atlascore/eval` package with `LLMEvalJudge` (structured `CriterionScore` output), `ReferenceEvalJudge` (fuzzy/contains/exact + citation overlap), `Dataset`, `EvalRunner`, `EvalResults`; golden dataset in `eval/golden/research.json`; `tests/eval/test_regression.py` loads golden set and enforces baseline; `backend/eval.py` runs `ResearchPipeline` through `EvalRunner` and returns `EvalReport` to the frontend eval viewer |
-| 15+ | Framework comparison benchmark, deployment | Not started | Later phases |
+| 15 | Framework comparison benchmark | Done | LangGraph plan-based research pipeline under `benchmarks/langgraph/` (`LangGraphResearchPipeline`); `benchmarks/benchmark.py` harness comparing `atlascore` vs LangGraph on quality, latency, and cost; `benchmarks/generate_report.py` produces `docs/benchmark_report.md`; `tests/test_benchmark.py` asserts both pipelines produce comparable `ResearchReport` objects and the harness reports per-query metrics |
+| 16+ | Deployment | Not started | Later phases |
 
 ## Verification of completed work
 
-- `pytest tests/` — 94 passed, 1 skipped (cloud integration tests skipped by default)
+- `pytest tests/` — 96 passed, 1 skipped (cloud integration tests skipped by default)
 - `tests/eval/test_regression.py` loads `eval/golden/research.json`, runs the `EvalRunner` with `ReferenceEvalJudge`, and asserts the golden set meets an 0.85 average-score baseline while a degraded target fails a 0.6 baseline
 - `tests/test_cost_optimization.py` verifies `TriageAgent` filters irrelevant sources and that two-stage (cheap triage + strong extraction) is ~80-90% cheaper than a naive single-model run
 - `tests/test_computer_use.py` covers `PlaywrightWebClient` initialization/state/screenshot, browser tools, `ComputerUseAgent` tool-call loop, and `ResearcherAgent` browser fallback on fetch failure/sparse content
@@ -47,9 +48,10 @@ This file tracks what has been implemented and what is next for the Atlas projec
 - `tests/test_orchestration.py` covers round-robin, AI-driven, and plan-based orchestrators with mocked LLM clients
 - `tests/test_research.py` covers Planner, Triage, Researcher, Verifier, Synthesizer, CriticPanel, and full `ResearchPipeline`
 - `tests/test_backend.py` covers `/health`, `/sessions`, `POST /sessions/{id}/run`, `GET /sessions/{id}/stream` (SSE), `POST /sessions/{id}/approve` resume, and `POST /eval`
+- `tests/test_benchmark.py` asserts the from-scratch and LangGraph pipelines produce comparable `ResearchReport` objects and that the benchmark harness reports per-query quality, latency, and cost metrics
 - Frontend `npm run build` outputs `frontend/dist` that the FastAPI backend can serve
 - `npm run lint` (TypeScript) and `npm run build` pass in `frontend/`
-- `ruff check src backend tests examples` — clean
+- `ruff check src backend tests examples benchmarks` — clean
 - `pyright` (includes `src` and `backend`) — clean (one pre-existing `__all__` warning)
 - `uvicorn backend.main:app --port 8000` starts and `/health` reports the configured model, vision model, embedding provider, and registered MCP servers; `/mcp/servers` and `/mcp/tools` list discovered MCP tools
 - Real API smoke test (`examples/calculator_agent.py`) used `calculator` and `datetime` tools correctly.
