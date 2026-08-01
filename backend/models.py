@@ -49,7 +49,26 @@ class HealthResponse(BaseModel):
     model: Optional[str] = None
     search_provider: Optional[str] = None
     embedding_provider: Optional[str] = None
+    mcp_servers: List[str] = Field(default_factory=list)
     version: str = "0.1.0"
+
+
+class MCPToolInfo(BaseModel):
+    """Minimal metadata for an MCP tool."""
+
+    name: str
+    server_id: str
+    description: str = ""
+    approval_mode: str = "never_require"
+
+
+class MCPServerInfo(BaseModel):
+    """Minimal metadata for an MCP server."""
+
+    server_id: str
+    transport: str
+    connected: bool
+    tool_count: int
 
 
 class SessionInfo(BaseModel):

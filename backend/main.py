@@ -15,7 +15,7 @@ import json
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, AsyncGenerator, Optional
+from typing import Any, AsyncGenerator, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,7 +24,12 @@ from fastapi.staticfiles import StaticFiles
 
 from atlascore import OpenAIChatCompletionClient
 from atlascore.memory import BaseMemory
-from atlascore.tools import WebFetchTool, WebSearchTool
+from atlascore.tools import MCPClientManager, WebFetchTool, WebSearchTool
+from atlascore.tools._mcp import (
+    MCP_AVAILABLE,
+    HTTPServerConfig,
+    StdioServerConfig,
+)
 
 from .eval import EvalConfig, EvalHarness
 from .execution import EngineConfig, ResearchExecutionEngine
@@ -33,6 +38,8 @@ from .models import (
     CreateSessionRequest,
     EvalRequest,
     HealthResponse,
+    MCPServerInfo,
+    MCPToolInfo,
     RunRequest,
     SessionInfo,
 )
@@ -91,6 +98,99 @@ def _default_memory() -> Optional[BaseMemory]:
         return None
 
 
+def _mcp_server_configs() -> List[Any]:
+    """Build default MCP server configs from the environment."""
+    raw = os.getenv("MCP_SERVERS")
+    if raw:
+        try:
+            data = json.loads(raw)
+            if isinstance(data, list):
+                return [_parse_mcp_server_config(item) for item in data]
+        except Exception:
+            pass
+
+    configs: List[Any] = []
+    exa_url = os.getenv("MCP_EXA_URL", "https://mcp.exa.ai/mcp")
+    configs.append(
+        HTTPServerConfig(server_id="exa", url=exa_url, transport="streamable-http")
+    )
+
+    if os.getenv("MCP_ARXIV_ENABLED", "").lower() in ("1", "true", "yes"):
+        configs.append(
+            StdioServerConfig(
+                server_id="arxiv",
+                command="npx",
+                args=["-y", "@modelcontextprotocol/server-arxiv"],
+            )
+        )
+
+    if os.getenv("MCP_GITHUB_ENABLED", "").lower() in ("1", "true", "yes"):
+        configs.append(
+            StdioServerConfig(
+                server_id="github",
+                command="npx",
+                args=["-y", "@modelcontextprotocol/server-github"],
+                env={"GITHUB_TOKEN": os.getenv("GITHUB_TOKEN", "")},
+            )
+        )
+
+    if os.getenv("MCP_NEWS_ENABLED", "").lower() in ("1", "true", "yes"):
+        configs.append(
+            StdioServerConfig(
+                server_id="news",
+                command="npx",
+                args=["-y", "@modelcontextprotocol/server-news"],
+            )
+        )
+
+    return configs
+
+
+def _parse_mcp_server_config(item: Any) -> Any:
+    """Parse a single MCP server config from JSON/env representation."""
+    if isinstance(item, str):
+        return HTTPServerConfig(server_id=item, url=item, transport="streamable-http")
+
+    server_id = item.get("server_id") or item.get("id")
+    transport = item.get("transport", "streamable-http")
+    url = item.get("url", "")
+    command = item.get("command", "")
+    args = item.get("args", [])
+    env = item.get("env")
+    headers = item.get("headers")
+
+    if transport == "stdio":
+        return StdioServerConfig(
+            server_id=server_id, command=command, args=args, env=env
+        )
+
+    return HTTPServerConfig(
+        server_id=server_id,
+        url=url,
+        transport=transport,
+        headers=headers,
+        env=env,
+    )
+
+
+def _default_mcp_manager() -> Optional[MCPClientManager]:
+    """Create an MCP manager with default server configs but do not connect yet."""
+    if not MCP_AVAILABLE:
+        return None
+
+    configs = _mcp_server_configs()
+    if not configs:
+        return None
+
+    manager = MCPClientManager()
+    for config in configs:
+        try:
+            manager.add_server(config)
+        except Exception:
+            pass
+    return manager
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan: initialize shared state."""
@@ -99,7 +199,19 @@ async def lifespan(app: FastAPI):
     app.state.search_tool = _default_search_tool()
     app.state.fetch_tool = WebFetchTool()
     app.state.memory = _default_memory()
+    app.state.mcp_manager = _default_mcp_manager()
     app.state.persist_dir = os.getenv("ATLAS_PERSIST_DIR", "data/research")
+
+    # Best-effort background MCP connection; failures do not block startup.
+    mcp_manager = app.state.mcp_manager
+    if mcp_manager is not None:
+        asyncio.create_task(
+            asyncio.wait_for(
+                mcp_manager.connect_all(),
+                timeout=float(os.getenv("MCP_CONNECT_TIMEOUT", "30")),
+            )
+        )
+
     yield
 
 
@@ -125,6 +237,7 @@ def get_engine_config(request: Request) -> EngineConfig:
     search_tool = request.app.state.search_tool
     fetch_tool = request.app.state.fetch_tool
     memory = getattr(request.app.state, "memory", None)
+    mcp_manager = getattr(request.app.state, "mcp_manager", None)
     if model_client is None or search_tool is None:
         raise HTTPException(
             status_code=503,
@@ -138,6 +251,7 @@ def get_engine_config(request: Request) -> EngineConfig:
         search_tool=search_tool,
         fetch_tool=fetch_tool,
         memory=memory,
+        mcp_manager=mcp_manager,
         persist_dir=request.app.state.persist_dir,
     )
 
@@ -156,16 +270,63 @@ def _embedding_provider_name() -> Optional[str]:
     return None
 
 
+def _get_mcp_manager(request: Request) -> Optional[MCPClientManager]:
+    return getattr(request.app.state, "mcp_manager", None)
+
+
 @app.get("/health", response_model=HealthResponse)
 async def health(request: Request):
-    """Health check with configured model, search, and embedding provider."""
+    """Health check with configured model, search, embedding, and MCP servers."""
+    mcp_manager = _get_mcp_manager(request)
+    mcp_servers = mcp_manager.list_servers() if mcp_manager else []
     return HealthResponse(
         status="healthy",
         model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
         search_provider=_search_provider_name(),
         embedding_provider=_embedding_provider_name(),
+        mcp_servers=mcp_servers,
         version="0.1.0",
     )
+
+
+@app.get("/mcp/servers", response_model=List[MCPServerInfo])
+async def list_mcp_servers(request: Request):
+    """List registered MCP servers and their connection status."""
+    mcp_manager = _get_mcp_manager(request)
+    if not mcp_manager:
+        return []
+
+    result = []
+    for sid in mcp_manager.list_servers():
+        config = getattr(mcp_manager, "_servers", {}).get(sid)
+        result.append(
+            MCPServerInfo(
+                server_id=sid,
+                transport=config.transport if config else "unknown",
+                connected=mcp_manager.is_connected(sid),
+                tool_count=len(mcp_manager.get_tools(sid)),
+            )
+        )
+    return result
+
+
+@app.get("/mcp/tools", response_model=List[MCPToolInfo])
+async def list_mcp_tools(request: Request):
+    """List tools discovered from connected MCP servers."""
+    mcp_manager = _get_mcp_manager(request)
+    if not mcp_manager:
+        return []
+
+    tools = mcp_manager.get_tools()
+    return [
+        MCPToolInfo(
+            name=tool.name,
+            server_id=getattr(tool, "server_id", ""),
+            description=tool.description,
+            approval_mode=tool.approval_mode.value,
+        )
+        for tool in tools
+    ]
 
 
 @app.post("/sessions", response_model=SessionInfo)
@@ -356,6 +517,7 @@ def _make_pipeline(config: EngineConfig, session: Session) -> Any:
         fetch_tool=config.fetch_tool,
         triage_model_client=config.model_client,
         memory=config.memory,
+        mcp_manager=config.mcp_manager,
         persist_dir=config.persist_dir,
         approval_event_factory=approval_event_factory,
     )

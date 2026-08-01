@@ -8,6 +8,16 @@ from ._core_tools import (
     ThinkTool,
     create_core_tools,
 )
+from ._mcp import (
+    MCP_AVAILABLE,
+    HTTPServerConfig,
+    MCPClientManager,
+    MCPServerConfig,
+    MCPTool,
+    StdioServerConfig,
+    TransportType,
+    create_mcp_tools,
+)
 from ._research_tools import WebFetchTool, WebSearchTool, create_research_tools
 
 __all__ = [
@@ -24,4 +34,12 @@ __all__ = [
     "WebSearchTool",
     "WebFetchTool",
     "create_research_tools",
+    "MCPClientManager",
+    "MCPServerConfig",
+    "StdioServerConfig",
+    "HTTPServerConfig",
+    "TransportType",
+    "MCPTool",
+    "create_mcp_tools",
+    "MCP_AVAILABLE",
 ]

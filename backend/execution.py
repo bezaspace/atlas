@@ -11,7 +11,7 @@ from atlascore import OpenAIChatCompletionClient
 from atlascore.cancellation import CancellationToken
 from atlascore.memory import BaseMemory
 from atlascore.research import ResearchPipeline
-from atlascore.tools import WebFetchTool, WebSearchTool
+from atlascore.tools import MCPClientManager, WebFetchTool, WebSearchTool
 from atlascore.workflow import WorkflowCompletedEvent, WorkflowRunner
 
 from .session_store import Session, SessionManager
@@ -25,6 +25,7 @@ class EngineConfig:
     search_tool: WebSearchTool
     fetch_tool: WebFetchTool
     memory: Optional[BaseMemory] = None
+    mcp_manager: Optional[MCPClientManager] = None
     persist_dir: str = "data/research"
 
 
@@ -62,6 +63,7 @@ class ResearchExecutionEngine:
                 fetch_tool=self.config.fetch_tool,
                 triage_model_client=self.config.model_client,
                 memory=self.config.memory,
+                mcp_manager=self.config.mcp_manager,
                 persist_dir=self.config.persist_dir,
                 approval_event_factory=approval_event_factory if require_human_approval else None,
             )

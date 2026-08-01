@@ -164,6 +164,7 @@ class ResearchPipeline:
         fetch_tool: BaseTool,
         triage_model_client: Optional[BaseChatCompletionClient] = None,
         memory: Optional[BaseMemory] = None,
+        mcp_manager: Optional[Any] = None,
         persist_dir: str = "data/research",
         approval_event_factory: Optional[Callable[[str], asyncio.Event]] = None,
     ) -> None:
@@ -172,6 +173,7 @@ class ResearchPipeline:
         self.fetch_tool = fetch_tool
         self.triage_model_client = triage_model_client or model_client
         self.memory = memory
+        self.mcp_manager = mcp_manager
         self.persist_dir = Path(persist_dir)
         self.approval_event_factory = approval_event_factory
 

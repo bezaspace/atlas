@@ -26,6 +26,9 @@ rag = [
     "sentence-transformers>=2.2.0",
     "google-genai>=1.0.0",
 ]
+mcp = [
+    "mcp>=2.0.0",
+]
 computer-use = [
     "playwright>=1.40.0",
     "pillow>=10.0.0",
