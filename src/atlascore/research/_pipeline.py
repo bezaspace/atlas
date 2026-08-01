@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import re
 from datetime import datetime
@@ -99,6 +100,7 @@ class SynthesizeInput(BaseModel):
 
     query: str = Field(...)
     verification: VerificationResult = Field(...)
+    rag_context: Optional[str] = Field(default=None)
 
 
 class SynthesizeOutput(BaseModel):
@@ -260,6 +262,7 @@ class ResearchPipeline:
         workflow.add_edge("retrieve", "search")
         workflow.add_edge("search", "verify")
         workflow.add_edge("search", "persist")
+        workflow.add_edge("retrieve", "synthesize")
         workflow.add_edge("verify", "synthesize")
         workflow.add_edge("synthesize", "critic")
         workflow.add_edge("synthesize", "persist")
@@ -288,10 +291,30 @@ class ResearchPipeline:
             raise RuntimeError("Pipeline did not produce a report")
         return ResearchReport(**report_data)
 
+    async def _retrieve_context(self, query: str, limit: int = 3) -> str:
+        """Retrieve relevant prior briefs/sources from the vector memory."""
+        if self.memory is None:
+            return ""
+        parts: List[str] = []
+        result = await self.memory.query(query, limit=limit)
+        for memory in result.results:
+            kind = memory.metadata.get("kind", "document")
+            source = memory.metadata.get("url") or memory.metadata.get("title") or kind
+            parts.append(f"[{kind}: {source}]\n{memory.content[:2000]}")
+        return "\n\n".join(parts)
+
     async def _plan_step(self, input: ResearchQuery, context: Context) -> PlanOutput:
         if input.session_id:
             context.set("session_id", input.session_id)
-        plan = await self.planner.run(input.query, context=input.context or "")
+
+        rag_context = await self._retrieve_context(input.query, limit=3)
+        combined_context = ""
+        if rag_context:
+            combined_context += f"Prior knowledge from the knowledge base:\n{rag_context}\n\n"
+        if input.context:
+            combined_context += f"Additional context:\n{input.context}"
+
+        plan = await self.planner.run(input.query, context=combined_context.strip())
         output = PlanOutput(query=input.query, plan=plan)
         context.set("plan_output", output.model_dump())
         context.set("plan_usage", self.planner.last_usage.model_dump())
@@ -310,10 +333,15 @@ class ResearchPipeline:
                     if memory.content in seen:
                         continue
                     seen.add(memory.content)
-                    rag_context_parts.append(memory.content)
-                    source = memory.metadata.get("source_url") or memory.metadata.get("title")
-                    if source:
-                        retrieved_sources.append(source)
+                    kind = memory.metadata.get("kind", "document")
+                    source = (
+                        memory.metadata.get("url")
+                        or memory.metadata.get("source_url")
+                        or memory.metadata.get("title")
+                        or kind
+                    )
+                    retrieved_sources.append(source)
+                    rag_context_parts.append(f"[{kind}: {source}]\n{memory.content[:2000]}")
 
         rag_context = "\n\n".join(rag_context_parts)
         output = RAGOutput(rag_context=rag_context, retrieved_sources=retrieved_sources)
@@ -340,7 +368,9 @@ class ResearchPipeline:
     async def _synthesize_step(
         self, input: SynthesizeInput, context: Context
     ) -> SynthesizeOutput:
-        brief = await self.synthesizer.run(input.query, input.verification)
+        brief = await self.synthesizer.run(
+            input.query, input.verification, rag_context=input.rag_context or ""
+        )
         output = SynthesizeOutput(query=input.query, brief=brief)
         context.set("synthesize_output", output.model_dump())
         context.set("synthesize_usage", self.synthesizer.last_usage.model_dump())
@@ -381,14 +411,20 @@ class ResearchPipeline:
             feedback=feedback,
         )
 
+    def _url_hash(self, url: str) -> str:
+        """Stable hash used for source deduplication and file naming."""
+        return hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
+
     async def _persist_step(self, input: PersistInput, context: Context) -> ResearchReport:
         slug = re.sub(r"\W+", "-", input.query.lower()).strip("-")[:50]
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        session_id = context.get("session_id") or "unknown"
         run_dir = self.persist_dir / slug / timestamp
         run_dir.mkdir(parents=True, exist_ok=True)
 
         brief_path = run_dir / "brief.md"
-        brief_path.write_text(input.brief.to_markdown(), encoding="utf-8")
+        brief_markdown = input.brief.to_markdown()
+        brief_path.write_text(brief_markdown, encoding="utf-8")
 
         sources_path = run_dir / "sources.json"
         sources_path.write_text(
@@ -396,37 +432,57 @@ class ResearchPipeline:
             encoding="utf-8",
         )
 
+        # Write raw source documents for cross-session re-hydration.
+        sources_dir = Path("data/sources")
+        sources_dir.mkdir(parents=True, exist_ok=True)
+        source_file_paths: List[str] = []
+        for source in input.evidence:
+            if not source.url or not source.content:
+                continue
+            url_hash = self._url_hash(source.url)
+            source_path = sources_dir / f"{url_hash}.md"
+            source_path.write_text(
+                f"# {source.title or 'Untitled'}\n\nURL: {source.url}\n\n{source.content}",
+                encoding="utf-8",
+            )
+            source_file_paths.append(str(source_path))
+
         review_path = run_dir / "critic_review.json"
         review_path.write_text(
             input.critic_review.model_dump_json(indent=2),
             encoding="utf-8",
         )
 
-        paths = [str(brief_path), str(sources_path), str(review_path)]
+        paths = [str(brief_path), str(sources_path), str(review_path), *source_file_paths]
 
         usage = self._aggregate_usage(context)
 
         if self.memory:
             await self.memory.add(
                 MemoryContent(
-                    content=input.brief.to_markdown(),
+                    content=brief_markdown,
                     metadata={
+                        "kind": "brief",
                         "query": input.query,
-                        "type": "research_brief",
+                        "session_id": session_id,
+                        "timestamp": timestamp,
                         "paths": paths,
+                        "point_id": f"brief-{session_id}-{timestamp}",
                     },
                 )
             )
             for source in input.evidence:
                 if source.content:
+                    url_hash = self._url_hash(source.url) if source.url else ""
                     await self.memory.add(
                         MemoryContent(
                             content=source.content,
                             metadata={
+                                "kind": "source",
                                 "query": input.query,
-                                "type": "source",
-                                "source_url": source.url,
+                                "url": source.url,
                                 "title": source.title,
+                                "url_hash": url_hash,
                             },
                         )
                     )

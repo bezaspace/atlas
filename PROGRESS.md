@@ -5,7 +5,7 @@ This file tracks what has been implemented and what is next for the Atlas projec
 ## Latest state
 
 - **Current branch target:** `master`
-- **Last milestone completed:** Phase 9 (Frontend dashboard)
+- **Last milestone completed:** Phase 10 (RAG knowledge base with Gemini embeddings)
 - **Package:** `atlascore` is installable and tested
 
 ## Milestones
@@ -28,11 +28,12 @@ This file tracks what has been implemented and what is next for the Atlas projec
 | 7 | Research product | Done | `ResearchPlan`, `SearchResult`, `TriageResult`, `CriticReview`, `ResearchReport`; `WebSearchTool`/`WebFetchTool`; `PlannerAgent`, `TriageAgent`, `ResearcherAgent`, `VerifierAgent`, `SynthesizerAgent`; `CriticPanel`; full typed research pipeline DAG |
 | 8 | Backend API | Done | FastAPI + lifespan + CORS; `/health`; in-memory `SessionManager`/`SessionStore`; `POST /sessions/{id}/run` + `GET /sessions/{id}/stream` (SSE); `POST /sessions/{id}/approve` human-in-the-loop gate; `POST /eval` dataset eval harness with LLM-as-judge; tests |
 | 9 | Frontend dashboard | Done | React 19 + TypeScript + Vite + Tailwind CSS v4; live SSE activity feed; research query input; markdown brief with citations; sources panel; human approval gate UI; sessions/eval viewers; cost/trace inspector |
-| 10+ | RAG, MCP, computer-use, deployment | Not started | Later phases |
+| 10 | RAG knowledge base | Done | Persistent Qdrant collection for briefs/sources; Gemini `gemini-embedding-001` free-tier embeddings with local sentence-transformers fallback; retrieval at plan/research/synthesis time; source deduplication and `data/sources/<url_hash>.md` re-hydration files |
+| 11+ | MCP, computer-use, deployment | Not started | Later phases |
 
 ## Verification of completed work
 
-- `pytest tests/` — 71 passed, 7 skipped (cloud integration tests skipped by default)
+- `pytest tests/` — 77 passed, 1 skipped (cloud integration tests skipped by default)
 - `tests/test_qdrant_memory.py` covers add/query/get_context/clear for `:memory:` and local path; cloud test verified against Qdrant Cloud
 - `tests/test_workflow.py` covers DAG builder/validation, runner, fan-in, conditional edges, checkpoint save/resume, file store, and `AgentStep`
 - `tests/test_orchestration.py` covers round-robin, AI-driven, and plan-based orchestrators with mocked LLM clients
@@ -42,6 +43,7 @@ This file tracks what has been implemented and what is next for the Atlas projec
 - `npm run lint` (TypeScript) and `npm run build` pass in `frontend/`
 - `ruff check src backend tests examples` — clean
 - `pyright` (includes `src` and `backend`) — clean (one pre-existing `__all__` warning)
+- `uvicorn backend.main:app --port 8000` starts and `/health` reports the configured embedding provider
 - Real API smoke test (`examples/calculator_agent.py`) used `calculator` and `datetime` tools correctly.
 - New example `examples/orchestration_demo.py` provides a poet/critic round-robin smoke script.
 - New example `examples/research_pipeline.py` demonstrates the full research pipeline with live web search/fetch.
@@ -55,6 +57,7 @@ source .venv/bin/activate
 export LLM_API_KEY="..."
 export LLM_MODEL="gpt-4o-mini"
 export TAVILY_API_KEY="..."  # or GOOGLE_API_KEY + GOOGLE_CSE_ID
+export GEMINI_API_KEY="..."   # free-tier Gemini embeddings for RAG
 uvicorn backend.main:app --port 8000
 ```
 
@@ -78,7 +81,7 @@ uvicorn backend.main:app --port 8000
 
 ## Next recommended step
 
-Phase 9 is complete. Next is **Phase 10+** (advanced RAG, MCP, computer-use, deployment).
+Phase 10 is complete. Next is **Phase 11+** (MCP, computer-use, deployment).
 
 ## References
 

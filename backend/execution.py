@@ -9,6 +9,7 @@ from typing import Any, AsyncGenerator, Dict, Optional
 
 from atlascore import OpenAIChatCompletionClient
 from atlascore.cancellation import CancellationToken
+from atlascore.memory import BaseMemory
 from atlascore.research import ResearchPipeline
 from atlascore.tools import WebFetchTool, WebSearchTool
 from atlascore.workflow import WorkflowCompletedEvent, WorkflowRunner
@@ -23,6 +24,7 @@ class EngineConfig:
     model_client: OpenAIChatCompletionClient
     search_tool: WebSearchTool
     fetch_tool: WebFetchTool
+    memory: Optional[BaseMemory] = None
     persist_dir: str = "data/research"
 
 
@@ -59,6 +61,7 @@ class ResearchExecutionEngine:
                 search_tool=self.config.search_tool,
                 fetch_tool=self.config.fetch_tool,
                 triage_model_client=self.config.model_client,
+                memory=self.config.memory,
                 persist_dir=self.config.persist_dir,
                 approval_event_factory=approval_event_factory if require_human_approval else None,
             )

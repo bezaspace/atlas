@@ -23,6 +23,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from atlascore import OpenAIChatCompletionClient
+from atlascore.memory import BaseMemory
 from atlascore.tools import WebFetchTool, WebSearchTool
 
 from .eval import EvalConfig, EvalHarness
@@ -60,6 +61,36 @@ def _default_search_tool() -> Optional[WebSearchTool]:
     return None
 
 
+def _default_memory() -> Optional[BaseMemory]:
+    """Initialize Qdrant-backed memory with Gemini embeddings, or fall back."""
+    try:
+        from atlascore.embeddings import GeminiEmbeddingClient
+        from atlascore.memory import QdrantMemory
+    except ImportError:
+        return None
+
+    gemini_api_key = os.getenv("GEMINI_API_KEY")
+    embedding_fn = None
+    if gemini_api_key:
+        try:
+            embedding_fn = GeminiEmbeddingClient(
+                api_key=gemini_api_key,
+                model=os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001"),
+            )
+        except Exception:
+            embedding_fn = None
+
+    qdrant_path = os.getenv("QDRANT_PATH", "data/qdrant")
+    try:
+        return QdrantMemory(
+            collection_name="atlas_rag",
+            path=qdrant_path,
+            embedding_fn=embedding_fn,
+        )
+    except Exception:
+        return None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan: initialize shared state."""
@@ -67,6 +98,7 @@ async def lifespan(app: FastAPI):
     app.state.model_client = _default_model_client()
     app.state.search_tool = _default_search_tool()
     app.state.fetch_tool = WebFetchTool()
+    app.state.memory = _default_memory()
     app.state.persist_dir = os.getenv("ATLAS_PERSIST_DIR", "data/research")
     yield
 
@@ -92,6 +124,7 @@ def get_engine_config(request: Request) -> EngineConfig:
     model_client = request.app.state.model_client
     search_tool = request.app.state.search_tool
     fetch_tool = request.app.state.fetch_tool
+    memory = getattr(request.app.state, "memory", None)
     if model_client is None or search_tool is None:
         raise HTTPException(
             status_code=503,
@@ -104,6 +137,7 @@ def get_engine_config(request: Request) -> EngineConfig:
         model_client=model_client,
         search_tool=search_tool,
         fetch_tool=fetch_tool,
+        memory=memory,
         persist_dir=request.app.state.persist_dir,
     )
 
@@ -116,13 +150,20 @@ def _search_provider_name() -> Optional[str]:
     return None
 
 
+def _embedding_provider_name() -> Optional[str]:
+    if os.getenv("GEMINI_API_KEY"):
+        return "gemini"
+    return None
+
+
 @app.get("/health", response_model=HealthResponse)
 async def health(request: Request):
-    """Health check with configured model and search provider."""
+    """Health check with configured model, search, and embedding provider."""
     return HealthResponse(
         status="healthy",
         model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
         search_provider=_search_provider_name(),
+        embedding_provider=_embedding_provider_name(),
         version="0.1.0",
     )
 
@@ -314,6 +355,7 @@ def _make_pipeline(config: EngineConfig, session: Session) -> Any:
         search_tool=config.search_tool,
         fetch_tool=config.fetch_tool,
         triage_model_client=config.model_client,
+        memory=config.memory,
         persist_dir=config.persist_dir,
         approval_event_factory=approval_event_factory,
     )

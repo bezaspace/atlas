@@ -75,7 +75,16 @@ class QdrantMemory(BaseMemory):
         from qdrant_client.models import Distance, VectorParams
 
         if self.client.collection_exists(self.collection_name):
+            try:
+                info = self.client.get_collection(self.collection_name)
+                existing = getattr(info.config.params, "vectors", None)
+                existing_size = existing.size if existing else None
+                if existing_size == self._vector_size():
+                    return
+            except Exception:
+                pass
             self.client.delete_collection(self.collection_name)
+
         self.client.create_collection(
             collection_name=self.collection_name,
             vectors_config=VectorParams(size=self._vector_size(), distance=Distance.COSINE),
@@ -109,11 +118,20 @@ class QdrantMemory(BaseMemory):
         model = self._get_embedding_model()
         return model.encode(text).tolist()
 
+    def _point_id(self, content: MemoryContent) -> str:
+        """Use an explicit point id for deduplication when available."""
+        metadata = content.metadata or {}
+        if metadata.get("kind") == "source" and metadata.get("url_hash"):
+            return metadata["url_hash"]
+        if metadata.get("point_id"):
+            return metadata["point_id"]
+        return str(uuid.uuid4())
+
     async def add(self, content: MemoryContent) -> None:
         from qdrant_client.models import PointStruct
 
         vector = self._embed(content.content)
-        point_id = str(uuid.uuid4())
+        point_id = self._point_id(content)
         payload = {
             "content": content.content,
             "mime_type": content.mime_type,
@@ -195,6 +213,8 @@ class QdrantMemory(BaseMemory):
         return MemoryQueryResult(results=memories)
 
     async def clear(self) -> None:
+        if self.client.collection_exists(self.collection_name):
+            self.client.delete_collection(self.collection_name)
         self._ensure_collection()
 
     async def get_stats(self) -> Dict[str, Any]:

@@ -264,10 +264,12 @@ class SynthesizerAgent(_BaseResearchAgent):
         )
 
     async def run(
-        self, query: str, verification: VerificationResult
+        self, query: str, verification: VerificationResult, rag_context: str = ""
     ) -> ResearchBrief:
-        prompt = (
-            f"Research question: {query}\n\n"
+        prompt = f"Research question: {query}\n\n"
+        if rag_context:
+            prompt += f"Prior knowledge:\n{rag_context}\n\n"
+        prompt += (
             f"Verification result: {verification.model_dump_json()}\n\n"
             "Write the final research brief."
         )

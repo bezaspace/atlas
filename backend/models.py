@@ -48,6 +48,7 @@ class HealthResponse(BaseModel):
     status: str = "healthy"
     model: Optional[str] = None
     search_provider: Optional[str] = None
+    embedding_provider: Optional[str] = None
     version: str = "0.1.0"
 
 
