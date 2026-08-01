@@ -24,6 +24,7 @@ class EngineConfig:
     model_client: OpenAIChatCompletionClient
     search_tool: WebSearchTool
     fetch_tool: WebFetchTool
+    triage_model_client: Optional[OpenAIChatCompletionClient] = None
     vision_model_client: Optional[OpenAIChatCompletionClient] = None
     memory: Optional[BaseMemory] = None
     mcp_manager: Optional[MCPClientManager] = None
@@ -62,7 +63,7 @@ class ResearchExecutionEngine:
                 model_client=self.config.model_client,
                 search_tool=self.config.search_tool,
                 fetch_tool=self.config.fetch_tool,
-                triage_model_client=self.config.model_client,
+                triage_model_client=self.config.triage_model_client,
                 vision_model_client=self.config.vision_model_client,
                 memory=self.config.memory,
                 mcp_manager=self.config.mcp_manager,

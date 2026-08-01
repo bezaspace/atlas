@@ -47,6 +47,7 @@ class HealthResponse(BaseModel):
 
     status: str = "healthy"
     model: Optional[str] = None
+    triage_model: Optional[str] = None
     vision_model: Optional[str] = None
     search_provider: Optional[str] = None
     embedding_provider: Optional[str] = None

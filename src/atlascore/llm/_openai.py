@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from typing import Any, AsyncGenerator, Dict, List, Optional, Type
 
@@ -27,6 +28,9 @@ from ._base import (
     BaseChatCompletionError,
     RateLimitError,
 )
+
+logger = logging.getLogger(__name__)
+_unknown_cost_warned: set[str] = set()
 
 
 class OpenAIChatCompletionClient(BaseChatCompletionClient):
@@ -191,6 +195,7 @@ class OpenAIChatCompletionClient(BaseChatCompletionClient):
                         tokens_input=chunk.usage.prompt_tokens,
                         tokens_output=chunk.usage.completion_tokens,
                         tool_calls=0,
+                        cost_estimate=self._estimate_cost(chunk.usage),
                     )
                     yield ChatCompletionChunk(
                         content="",
@@ -253,20 +258,54 @@ class OpenAIChatCompletionClient(BaseChatCompletionClient):
             raise BaseChatCompletionError(f"Unexpected error: {str(e)}")
 
     def _estimate_cost(self, usage: CompletionUsage) -> Optional[float]:
-        """Estimate the cost of the API call based on token usage."""
-        pricing = {
-            "gpt-4": {"input": 0.03 / 1000, "output": 0.06 / 1000},
-            "gpt-4-turbo": {"input": 0.01 / 1000, "output": 0.03 / 1000},
-            "gpt-3.5-turbo": {"input": 0.0005 / 1000, "output": 0.0015 / 1000},
-            "gpt-4o": {"input": 0.005 / 1000, "output": 0.015 / 1000},
-            "gpt-4o-mini": {"input": 0.00015 / 1000, "output": 0.0006 / 1000},
-        }
+        """Estimate the cost of the API call based on token usage.
 
-        for key, rates in pricing.items():
-            if key in self.model:
-                return (
-                    usage.prompt_tokens * rates["input"] + usage.completion_tokens * rates["output"]
-                )
+        Prices are in USD per 1M tokens and are matched by substring on the
+        model identifier. Free providers and unknown models return 0 or None.
+        """
+        model = self.model.lower()
+
+        # Free aliases carry zero cost.
+        if ":free" in model or model.endswith("/free") or model == "kilo-auto/free":
+            return 0.0
+
+        # Prices: USD per 1M tokens (input, output). Order matters: more specific first.
+        pricing: list[tuple[str, tuple[float, float]]] = [
+            # OpenAI
+            ("gpt-4o-mini", (0.15, 0.60)),
+            ("gpt-4o", (2.50, 10.00)),
+            ("gpt-4-turbo", (10.00, 30.00)),
+            ("gpt-4-32k", (60.00, 120.00)),
+            ("gpt-4", (30.00, 60.00)),
+            ("gpt-3.5-turbo", (0.50, 1.50)),
+            # Anthropic / OpenRouter
+            ("claude-3-5-sonnet", (3.00, 15.00)),
+            ("claude-3.5-sonnet", (3.00, 15.00)),
+            ("claude-3-opus", (15.00, 75.00)),
+            ("claude-3-haiku", (0.25, 1.25)),
+            ("claude-sonnet", (3.00, 15.00)),
+            ("claude-opus", (15.00, 75.00)),
+            ("claude-haiku", (0.25, 1.25)),
+            ("claude-4", (5.00, 25.00)),
+            # Google / Gemini
+            ("gemini-2.5-pro", (1.25, 10.00)),
+            ("gemini-2.5-flash-lite", (0.10, 0.40)),
+            ("gemini-2.5-flash", (0.10, 0.40)),
+            ("gemini-1.5-pro", (1.25, 5.00)),
+            ("gemini-1.5-flash", (0.075, 0.30)),
+            # Kilo / StepFun / inclusionAI paid
+            ("stepfun/step-3.7-flash", (0.20, 1.15)),
+            ("stepfun/step-3.5-flash", (0.10, 0.30)),
+            ("inclusionai/ling-3.0-flash", (0.30, 2.50)),
+        ]
+
+        for key, (input_rate, output_rate) in pricing:
+            if key in model:
+                return (usage.prompt_tokens * input_rate + usage.completion_tokens * output_rate) / 1_000_000
+
+        if self.model not in _unknown_cost_warned:
+            _unknown_cost_warned.add(self.model)
+            logger.warning("Cost estimate unavailable for model %s", self.model)
         return None
 
     def _make_schema_compatible(self, schema: Dict[str, Any]) -> Dict[str, Any]:

@@ -213,6 +213,7 @@ async def test_health(test_client):
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "healthy"
+    assert "triage_model" in data
 
 
 @pytest.mark.asyncio
